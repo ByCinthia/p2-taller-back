@@ -1,6 +1,6 @@
 """Create notificacion table
 
-Revision ID: 20260504_01_create_notificaciones
+Revision ID: 20260504_01_notificaciones
 Revises: 20260503_01_clear_old_fcm_tokens
 Create Date: 2026-05-04
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "20260504_01_create_notificaciones"
+revision: str = "20260504_01_notificaciones"
 down_revision: Union[str, None] = "20260503_01_clear_old_fcm_tokens"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

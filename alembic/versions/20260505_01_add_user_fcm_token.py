@@ -1,7 +1,7 @@
 """Add fcm_token to auth_user
 
 Revision ID: 20260505_01_add_user_fcm_token
-Revises: 20260504_01_create_notificaciones
+Revises: 20260504_01_notificaciones
 Create Date: 2026-05-05
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "20260505_01_add_user_fcm_token"
-down_revision: Union[str, None] = "20260504_01_create_notificaciones"
+down_revision: Union[str, None] = "20260504_01_notificaciones"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
