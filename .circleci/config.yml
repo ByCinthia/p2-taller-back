@@ -10,14 +10,12 @@ jobs:
     steps:
       - checkout
 
-      # Build the Docker image with docker compose
       - run:
           name: Build Docker image
           command: |
-            echo "🐳 Building Docker image..."
+            echo "Building Docker image..."
             docker compose build
 
-      # Verify the image was built
       - run:
           name: Verify image exists
           command: |
@@ -34,25 +32,24 @@ jobs:
           fingerprints:
             - "SHA256:up+RAgJy8I7UOdzlO17YgnCc9QS79jffVvRHLm3UIno"
 
-      # Deploy via SSH to EC2
       - run:
           name: Deploy to AWS EC2
           command: |
-            echo "🚀 Conectando a EC2 y desplegando..."
-            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
+            echo "Conectando a EC2 y desplegando..."
+            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} \<< 'EOF'
               set -e
               cd ${EC2_PATH}
 
-              echo "📦 Pull latest code..."
+              echo "Pull latest code..."
               git pull origin main
 
-              echo "🐳 Rebuild and restart containers..."
+              echo "Rebuild and restart containers..."
               docker compose up --build -d
 
-              echo "🧹 Clean up unused Docker images..."
+              echo "Clean up unused Docker images..."
               docker image prune -f
 
-              echo "✅ Deploy completado exitosamente en ${EC2_IP}"
+              echo "Deploy completado exitosamente en ${EC2_IP}"
             EOF
 
 workflows:
