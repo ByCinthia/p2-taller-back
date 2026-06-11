@@ -1,34 +1,68 @@
-# This config was automatically generated from your source code
-# Stacks detected: deps:python:.
 version: 2.1
+
 orbs:
   python: circleci/python@2
+
 jobs:
-  test-python:
-    # Install dependencies and run tests
-    docker:
-      - image: cimg/python:3.8-node
+  build:
+    machine:
+      image: ubuntu-2004:202201-02
     steps:
       - checkout
-      - python/install-packages
+
+      # Build the Docker image with docker compose
       - run:
-          name: Run tests
-          command: pytest --junitxml=junit.xml || ((($? == 5)) && echo 'Did not find any tests to run.')
-      - store_test_results:
-          path: junit.xml
+          name: Build Docker image
+          command: |
+            echo "🐳 Building Docker image..."
+            docker compose build
+
+      # Verify the image was built
+      - run:
+          name: Verify image exists
+          command: |
+            docker images | grep auxiliomecanico
+
   deploy:
-    # This is an example deploy job, not actually used by the workflow
-    docker:
-      - image: cimg/base:stable
+    machine:
+      image: ubuntu-2004:202201-02
     steps:
-      # Replace this with steps to deploy to users
+      - checkout
+
+      # Add SSH key for EC2 access (configurada en CircleCI con fingerprint)
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:up+RAgJy8I7UOdzlO17YgnCc9QS79jffVvRHLm3UIno"
+
+      # Deploy via SSH to EC2
       - run:
-          name: deploy
-          command: '#e.g. ./deploy.sh'
+          name: Deploy to AWS EC2
+          command: |
+            echo "🚀 Conectando a EC2 y desplegando..."
+            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
+              set -e
+              cd ${EC2_PATH}
+
+              echo "📦 Pull latest code..."
+              git pull origin main
+
+              echo "🐳 Rebuild and restart containers..."
+              docker compose up --build -d
+
+              echo "🧹 Clean up unused Docker images..."
+              docker image prune -f
+
+              echo "✅ Deploy completado exitosamente en ${EC2_IP}"
+            EOF
+
 workflows:
-  build-and-test:
+  build-and-deploy:
     jobs:
-      - test-python
-    # - deploy:
-    #     requires:
-    #       - test-python
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - main
