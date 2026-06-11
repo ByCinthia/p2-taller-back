@@ -1,6 +1,6 @@
 """Add 'atendido' value to incidente_estado enum
 
-Revision ID: 20260606_05_add_atendido_enum_value
+Revision ID: 20260606_05_atendido_enum
 Revises: 20260606_04_add_incidente_estado
 Create Date: 2026-06-06
 """
@@ -8,7 +8,7 @@ Create Date: 2026-06-06
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260606_05_add_atendido_enum_value"
+revision = "20260606_05_atendido_enum"
 down_revision = "20260606_04_add_incidente_estado"
 branch_labels = None
 depends_on = None
