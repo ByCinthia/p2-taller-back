@@ -1,12 +1,9 @@
 version: 2.1
 
-orbs:
-  python: circleci/python@2
-
 jobs:
   build:
     machine:
-      image: ubuntu-2004:202201-02
+      image: ubuntu-2204:current
     steps:
       - checkout
 
@@ -23,11 +20,10 @@ jobs:
 
   deploy:
     machine:
-      image: ubuntu-2004:202201-02
+      image: ubuntu-2204:current
     steps:
       - checkout
 
-      # Add SSH key for EC2 access (configurada en CircleCI con fingerprint)
       - add_ssh_keys:
           fingerprints:
             - "SHA256:up+RAgJy8I7UOdzlO17YgnCc9QS79jffVvRHLm3UIno"
@@ -36,21 +32,7 @@ jobs:
           name: Deploy to AWS EC2
           command: |
             echo "Conectando a EC2 y desplegando..."
-            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} \<< 'EOF'
-              set -e
-              cd ${EC2_PATH}
-
-              echo "Pull latest code..."
-              git pull origin main
-
-              echo "Rebuild and restart containers..."
-              docker compose up --build -d
-
-              echo "Clean up unused Docker images..."
-              docker image prune -f
-
-              echo "Deploy completado exitosamente en ${EC2_IP}"
-            EOF
+            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} "cd ${EC2_PATH} && git pull origin main && docker compose up --build -d && docker image prune -f && echo 'Deploy completado exitosamente en ${EC2_IP}'"
 
 workflows:
   build-and-deploy:
