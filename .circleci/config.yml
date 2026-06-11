@@ -16,7 +16,7 @@ jobs:
       - run:
           name: Verify image exists
           command: |
-            docker images | grep auxiliomecanico
+            docker compose images
 
   deploy:
     machine:
