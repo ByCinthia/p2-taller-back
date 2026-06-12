@@ -248,7 +248,7 @@ class Incidente(Base):
     descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
     # lifecycle states: pendiente, aceptada, asignada, atendido, en_proceso, completada
     estado: Mapped[str] = mapped_column(
-        SAEnum("pendiente", "aceptada", "asignada", "atendido", "en_proceso", "completada", name="incidente_estado"),
+        SAEnum("pendiente", "aceptada", "asignada", "atendido", "en_proceso", "completada", "cancelada", name="incidente_estado"),
         nullable=False,
         default="pendiente",
     )
