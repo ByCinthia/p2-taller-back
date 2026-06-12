@@ -4,7 +4,7 @@
 
 set -e
 
-MODEL="${OLLAMA_MODEL:-llama3.2:3b}"
+MODEL="${OLLAMA_MODEL:-tinyllama}"
 
 echo "🚀 Iniciando Ollama server..."
 ollama serve &
