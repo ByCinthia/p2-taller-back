@@ -11,6 +11,8 @@
 
   "auth": {
     "prefix": "",
+    "mirror_prefix": "/api/auth",
+    "note": "Todos los endpoints de auth también están disponibles bajo el prefijo /api/auth (ej: /api/auth/token/, /api/auth/me, etc.)",
     "endpoints": [
       {
         "method": "POST",
@@ -351,6 +353,19 @@
         "auth": true,
         "path_params": { "cliente_id": "int (requerido)" },
         "response_success": "list[IncidenteOut]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clientes/verificar-sms",
+        "description": "Enviar/verificar código SMS para cliente. Si body.code es null, envía código; si se incluye, verifica.",
+        "auth": true,
+        "body": {
+          "cliente_id": "string (requerido)",
+          "code": "string|null (opcional, si se omite se envía código, si se incluye se verifica)"
+        },
+        "response_success_code_sent": { "status": "code_sent" },
+        "response_success_verified": { "verified": "boolean" },
+        "errors": ["400: cliente_id requerido", "404: Cliente no encontrado"]
       }
     ]
   },
@@ -469,6 +484,27 @@
         "errors": ["404: Empleado no encontrado"]
       },
       {
+        "method": "GET",
+        "path": "/api/empleados/me/asignaciones",
+        "description": "Listar asignaciones activas del empleado autenticado",
+        "auth": true,
+        "response_success": [
+          {
+            "incidente_id": "string",
+            "incidente_tipo": "string|null",
+            "incidente_descripcion": "string|null",
+            "incidente_estado": "string|null",
+            "incidente_latitud": "float|null",
+            "incidente_longitud": "float|null",
+            "fecha_asignacion": "string ISO datetime",
+            "estado_tarea": "string",
+            "servicio_id": "string|null",
+            "servicio_nombre": "string|null"
+          }
+        ],
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
         "method": "POST",
         "path": "/api/empleados/",
         "description": "Crear empleado (JSON o multipart/form-data con foto)",
@@ -488,8 +524,17 @@
         "errors": ["400: Datos inválidos", "409: Email o CI ya existe"]
       },
       {
+        "method": "GET",
+        "path": "/api/empleados/{empleado_id}/",
+        "description": "Obtener empleado por ID",
+        "auth": true,
+        "path_params": { "empleado_id": "string (requerido)" },
+        "response_success": "EmpleadoOut",
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
         "method": "PUT",
-        "path": "/api/empleados/{empleado_id}",
+        "path": "/api/empleados/{empleado_id}/",
         "description": "Actualizar empleado (JSON o multipart/form-data)",
         "auth": true,
         "permission": "manage_empleados",
@@ -499,8 +544,19 @@
         "errors": ["404: Empleado no encontrado"]
       },
       {
+        "method": "PATCH",
+        "path": "/api/empleados/{empleado_id}/",
+        "description": "Actualizar empleado parcialmente (JSON o multipart/form-data con foto)",
+        "auth": true,
+        "permission": "manage_empleados",
+        "path_params": { "empleado_id": "string (requerido)" },
+        "body": "EmpleadoUpdate (campos opcionales)",
+        "response_success": "EmpleadoOut",
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
         "method": "DELETE",
-        "path": "/api/empleados/{empleado_id}",
+        "path": "/api/empleados/{empleado_id}/",
         "description": "Eliminar empleado",
         "auth": true,
         "permission": "manage_empleados",
@@ -618,6 +674,16 @@
         "errors": ["404: Rol no encontrado"]
       },
       {
+        "method": "PATCH",
+        "path": "/api/roles/{role_id}/",
+        "description": "Actualizar rol parcialmente",
+        "auth": true,
+        "permission": "manage_rol",
+        "body": { "nombre": "string (opcional)", "permisos": "list[string] (opcional)" },
+        "response_success": "RoleOut",
+        "errors": ["404: Rol no encontrado"]
+      },
+      {
         "method": "DELETE",
         "path": "/api/roles/{role_id}/",
         "description": "Eliminar rol",
@@ -668,6 +734,16 @@
         "errors": ["404: Permiso no encontrado"]
       },
       {
+        "method": "PATCH",
+        "path": "/api/permisos/{permiso_id}/",
+        "description": "Actualizar permiso parcialmente",
+        "auth": true,
+        "permission": "manage_permiso",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)" },
+        "response_success": "PermisoOut",
+        "errors": ["404: Permiso no encontrado"]
+      },
+      {
         "method": "DELETE",
         "path": "/api/permisos/{permiso_id}/",
         "description": "Eliminar permiso",
@@ -711,6 +787,16 @@
         "method": "PUT",
         "path": "/api/servicios/{servicio_id}/",
         "description": "Actualizar servicio",
+        "auth": true,
+        "permission": "manage_servicio",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)", "activo": "boolean (opcional)" },
+        "response_success": "ServicioOut",
+        "errors": ["404: Servicio no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/servicios/{servicio_id}/",
+        "description": "Actualizar servicio parcialmente",
         "auth": true,
         "permission": "manage_servicio",
         "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)", "activo": "boolean (opcional)" },
@@ -849,8 +935,8 @@
       {
         "method": "POST",
         "path": "/api/incidentes/{incidente_id}/ignorar",
-        "description": "Taller ignora solicitud (-1 estrella penalización)",
-        "auth": true,
+        "description": "Taller ignora solicitud (-1 estrella penalización). ⚠️ SIN AUTENTICACIÓN en el código actual (endpoint público)",
+        "auth": false,
         "body": { "empresa_id": "string (requerido)" },
         "response_success": { "message": "penalizacion_aplicada" },
         "errors": ["400: empresa_id requerido"]
@@ -868,6 +954,16 @@
           "talleres": "list[TallerCercanoOut]"
         },
         "errors": ["400: Solo incidentes pendientes con ubicación", "404: No encontrado"]
+      },
+      {
+        "method": "WS",
+        "path": "/api/incidentes/{incidente_id}/ws/tracking",
+        "description": "WebSocket para tracking en tiempo real (simplificado, sin autenticación por rol). Enviar 'ping' para keepalive.",
+        "auth": false,
+        "path_params": { "incidente_id": "string (ID del incidente)" },
+        "messages_recibidos_tecnico": {
+          "location_update": { "incidente_id": "string", "latitud": "float", "longitud": "float" }
+        }
       },
       {
         "method": "PATCH",
@@ -1159,6 +1255,72 @@
         "auth": true,
         "query_params": { "empresa_id": "string (opcional)" },
         "response_success": { "total_asignadas": "int", "atendidas_en_tiempo": "int", "porcentaje": "float" }
+      }
+    ]
+  },
+
+  "reportes": {
+    "prefix": "/api/reportes",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/reportes/generar",
+        "description": "Genera reporte dinámico usando IA local (Ollama). El prompt es texto libre en lenguaje natural. Soporta formato texto (JSON) o PDF (archivo descargable).",
+        "auth": true,
+        "body": {
+          "prompt": "string (requerido, instrucción en lenguaje natural, ej: 'Genera un resumen de incidentes del último mes')",
+          "formato": "string (opcional, default: texto, opciones: texto|pdf)",
+          "empresa_id": "string (opcional, filtra por taller)"
+        },
+        "response_success_texto": {
+          "reporte": "string (texto generado por IA)",
+          "metadata": {
+            "modelo": "string (nombre del modelo Ollama)",
+            "generado_en": "string ISO datetime",
+            "empresa_id": "string|null",
+            "prompt_original": "string"
+          },
+          "datos_contexto": "object (datos del dashboard usados como contexto)"
+        },
+        "response_success_pdf": "application/pdf (archivo binario para descarga)",
+        "errors": ["502: Ollama no disponible o modelo no instalado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/reportes/generar-audio",
+        "description": "Genera reporte a partir de audio. Transcribe automáticamente con Whisper y luego usa IA local para el reporte.",
+        "auth": true,
+        "content_type": "multipart/form-data",
+        "body": {
+          "archivo": "file (requerido, archivo de audio: mp3, wav, m4a, etc.)",
+          "formato": "string (opcional, default: texto, opciones: texto|pdf)",
+          "empresa_id": "string (opcional)"
+        },
+        "response_success_texto": {
+          "reporte": "string (texto generado por IA)",
+          "metadata": {
+            "modelo": "string",
+            "generado_en": "string ISO datetime",
+            "empresa_id": "string|null",
+            "prompt_original": "string",
+            "transcripcion": "string (texto transcrito del audio)"
+          },
+          "datos_contexto": "object"
+        },
+        "response_success_pdf": "application/pdf (archivo binario para descarga)",
+        "errors": ["400: Archivo no es audio o transcripción vacía", "502: Error transcribiendo o generando"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/reportes/estado-ia",
+        "description": "Verifica si Ollama está disponible y lista los modelos instalados",
+        "auth": true,
+        "response_success": {
+          "ollama_disponible": "boolean",
+          "url": "string (URL de Ollama)",
+          "modelo_configurado": "string (modelo por defecto)",
+          "modelos_instalados": "list[string] (modelos disponibles en Ollama)"
+        }
       }
     ]
   },

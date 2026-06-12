@@ -19,6 +19,7 @@ from app.routers.pagos_router import router as pagos_router
 from app.routers.websocket_router import router as websocket_router
 from app.routers.metricas_router import router as metricas_router
 from app.routers.dashboard_router import router as dashboard_router
+from app.routers.reportes_router import router as reportes_router
 
 
 settings = get_settings()
@@ -57,6 +58,7 @@ app.include_router(pagos_router)
 app.include_router(websocket_router, prefix="/api")
 app.include_router(metricas_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(reportes_router, prefix="/api")
 
 
 @app.get("/health")

@@ -12,4 +12,6 @@ openai
 alembic==1.13.2
 firebase-admin==7.4.0
 geoalchemy2==0.20.0
+ollama==0.4.8
+reportlab==4.4.0
 

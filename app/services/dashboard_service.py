@@ -97,7 +97,10 @@ def get_resumen(
         ).count()
 
     # Totales de entidades
-    total_talleres = db.query(func.count()).select_from(Empresa).scalar() or 0
+    talleres_q = db.query(func.count()).select_from(Empresa)
+    if empresa_id:
+        talleres_q = talleres_q.filter(Empresa.id == empresa_id)
+    total_talleres = talleres_q.scalar() or 0
     total_clientes = db.query(func.count()).select_from(Cliente).scalar() or 0
 
     tecnicos_q = db.query(func.count()).select_from(Empleado).filter(

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
-from sqlalchemy import Float, and_, case, distinct, func
+from sqlalchemy import Float, Numeric, and_, case, distinct, func
 from sqlalchemy.orm import Session
 
 from app.db.models import AsignacionServicio, Empresa, Incidente
@@ -171,8 +171,8 @@ def get_talleres_eficientes(db: Session, limit: int = 10) -> list[TallerEficient
 
 def get_zonas_mas_incidentes(db: Session, limit: int = 10) -> list[ZonaIncidenteOut]:
     """Agrupa incidentes por zona geográfica (lat/lon redondeado a 2 decimales ≈ 1 km)."""
-    lat_r = func.round(Incidente.latitud.cast(Float), 2)
-    lon_r = func.round(Incidente.longitud.cast(Float), 2)
+    lat_r = func.round(Incidente.latitud.cast(Numeric), 2)
+    lon_r = func.round(Incidente.longitud.cast(Numeric), 2)
 
     rows = (
         db.query(
