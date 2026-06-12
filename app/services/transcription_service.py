@@ -1,6 +1,6 @@
 import os
 
-import openai
+from openai import OpenAI
 
 
 def transcribe_audio(file_path: str) -> str:
@@ -13,23 +13,12 @@ def transcribe_audio(file_path: str) -> str:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not configured")
 
-    openai.api_key = api_key
+    client = OpenAI(api_key=api_key)
 
-    try:
-        with open(file_path, "rb") as fh:
-            # The OpenAI python client exposes an Audio.transcribe helper in recent versions
-            resp = openai.Audio.transcribe("gpt-4o-mini-transcribe", fh, language="es")
-    except Exception as exc:
-        raise
-
-    # Try common response keys
-    text = None
-    if isinstance(resp, dict):
-        text = resp.get("text") or resp.get("transcript")
-    if not text:
-        try:
-            text = str(resp)
-        except Exception:
-            text = ""
-
-    return text or ""
+    with open(file_path, "rb") as fh:
+        resp = client.audio.transcriptions.create(
+            model="gpt-4o-mini-transcribe",
+            file=fh,
+            language="es",
+        )
+        return resp.text or ""

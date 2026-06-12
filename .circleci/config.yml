@@ -37,7 +37,17 @@ jobs:
           name: Deploy to AWS EC2
           command: |
             echo "Conectando a EC2 y desplegando..."
-            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} "cd ${EC2_PATH} && git pull origin main && docker compose up --build -d && docker image prune -f && echo 'Deploy completado exitosamente en ${EC2_IP}'"
+            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} "
+              cd ${EC2_PATH} && \
+              git pull origin main && \
+              docker compose up --build -d && \
+              echo 'Esperando que Ollama inicie y descargue el modelo (auto via entrypoint)...' && \
+              sleep 30 && \
+              echo 'Verificando modelo descargado:' && \
+              docker compose exec -T ollama ollama list 2>/dev/null || echo 'El modelo aún se está descargando en segundo plano' && \
+              docker image prune -f && \
+              echo 'Deploy completado exitosamente en ${EC2_IP}'
+            "
 
 workflows:
   build-and-deploy:

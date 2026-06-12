@@ -225,6 +225,33 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
   - `PATCH /api/pagos/{pago_id}/confirmar` - confirmar pago
   - `PATCH /api/pagos/{pago_id}/rechazar` - rechazar pago
 
+- Dashboard:
+  - `GET /api/dashboard/` - dashboard completo con resumen, series, mapa, talleres, zonas
+  - `GET /api/dashboard/resumen` - tarjetas de resumen (totales por estado)
+  - `GET /api/dashboard/por-estado` - desglose de incidentes por estado
+  - `GET /api/dashboard/por-fecha` - serie temporal por día/semana/mes
+  - `GET /api/dashboard/mapa` - incidentes con coordenadas para mapa
+  - `GET /api/dashboard/talleres` - ranking de talleres con rendimiento
+
+- Métricas KPIs:
+  - `GET /api/metricas/dashboard` - dashboard consolidado con todos los KPIs
+  - `GET /api/metricas/tiempo-asignacion` - tiempo promedio de asignación
+  - `GET /api/metricas/tiempo-llegada` - tiempo promedio de llegada
+  - `GET /api/metricas/tipos-incidentes` - conteo por tipo
+  - `GET /api/metricas/talleres-eficientes` - ranking de eficiencia
+  - `GET /api/metricas/zonas-incidentes` - zonas geográficas con más incidentes
+  - `GET /api/metricas/cancelados` - casos cancelados (taller vs cliente)
+  - `GET /api/metricas/solicitudes-en-tiempo` - % solicitudes atendidas a tiempo
+
+- Reportes Dinámicos (IA local con Ollama):
+  - `POST /api/reportes/generar` - generar reporte por texto con IA
+  - `POST /api/reportes/generar-audio` - generar reporte desde audio (transcripción + IA)
+  - `GET /api/reportes/estado-ia` - verificar estado de Ollama y modelos instalados
+
+- WebSockets:
+  - `WS /api/ws/tracking/notifications/{user_id}` - notificaciones en tiempo real
+  - `WS /api/ws/tracking/{incidente_id}/{role}` - tracking GPS en tiempo real (client/technician)
+
 ## Verificacion rapida
 
 - Health check: `GET /health`
