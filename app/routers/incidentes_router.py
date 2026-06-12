@@ -8,11 +8,13 @@ from app.db.session import get_db
 from app.deps.auth import get_current_employee, get_current_user, require_permission
 from app.schemas.incidente import (
     AsignarTecnicoRequest,
+    AutoAsignarResponse,
     IncidenteCreate,
     IncidenteOut,
     IncidenteTrackingOut,
     IncidenteUpdate,
     IncidentePatchEstado,
+    TallerCercanoOut,
     TecnicoCercanoOut,
     TecnicoUbicacionUpdate,
 )
@@ -20,7 +22,9 @@ from app.services.cliente_service import get_cliente_for_user
 from app.services.permission_service import resolve_employee
 from app.services.incidente_service import (
     assign_tecnico,
+    auto_asignar_taller,
     close_active_asignacion_for_incidente,
+    find_talleres_cercanos,
     list_incidentes,
     list_tecnicos_disponibles,
     create_incidente,
@@ -567,3 +571,68 @@ def incidentes_add_evid_file(
             pass
 
     return {"id": ev.id, "url_archivo": public_url, "tipo": inferred_tipo, "texto": ev.texto}
+
+
+# ============================================================
+# FASE 1 — Asignación de Talleres
+# ============================================================
+
+@router.get("/talleres/cercanos", response_model=list[TallerCercanoOut])
+def talleres_cercanos(
+    latitud: float = Query(..., ge=-90, le=90),
+    longitud: float = Query(..., ge=-180, le=180),
+    radio_km: float = Query(default=5.0, gt=0, le=50),
+    servicio: str | None = Query(default=None, description="Filtrar por tipo de servicio (ej: grua, mecanica)"),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[TallerCercanoOut]:
+    """Buscar talleres cercanos al punto indicado.
+
+    Criterios de asignación:
+    - 3.1  Talleres dentro del radio (default 5 km).
+    - 3.2  Talleres que ofrecen el servicio solicitado.
+    - 3.4  Ordenados por puntuación alta.
+    """
+    return find_talleres_cercanos(
+        db,
+        latitud=latitud,
+        longitud=longitud,
+        radio_km=radio_km,
+        servicio_tipo=servicio,
+    )
+
+
+@router.post("/{incidente_id}/auto-asignar", response_model=AutoAsignarResponse)
+def incidentes_auto_asignar(
+    incidente_id: str,
+    radio_km: float = Query(default=5.0, gt=0, le=50),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AutoAsignarResponse:
+    """Busca el mejor taller para el incidente y lo acepta automáticamente.
+
+    Criterios: radio 5 km, servicio coincidente, mayor puntuación.
+    Si se encuentra un taller, el incidente pasa a estado 'aceptada' con
+    ``accepted_empresa_id`` asignado y se registra gamificación (+5).
+    """
+    try:
+        inc = get_incidente_or_404(db, incidente_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente no encontrado")
+
+    talleres = find_talleres_cercanos(
+        db,
+        latitud=float(inc.latitud) if inc.latitud else 0,
+        longitud=float(inc.longitud) if inc.longitud else 0,
+        radio_km=radio_km,
+        servicio_tipo=inc.tipo,
+    )
+
+    taller_asignado = auto_asignar_taller(db, inc, radio_km=radio_km)
+
+    return AutoAsignarResponse(
+        incidente_id=incidente_id,
+        talleres_encontrados=len(talleres),
+        taller_asignado=taller_asignado,
+        talleres=talleres,
+    )

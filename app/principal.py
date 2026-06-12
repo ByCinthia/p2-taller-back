@@ -17,6 +17,8 @@ from app.routers.servicios_router import router as servicios_router
 from app.routers.empresas_router import router as empresa_router
 from app.routers.pagos_router import router as pagos_router
 from app.routers.websocket_router import router as websocket_router
+from app.routers.metricas_router import router as metricas_router
+from app.routers.dashboard_router import router as dashboard_router
 
 
 settings = get_settings()
@@ -53,6 +55,8 @@ app.include_router(notificaciones_router, prefix="/api")
 app.include_router(empresa_router, prefix="/api")
 app.include_router(pagos_router)
 app.include_router(websocket_router, prefix="/api")
+app.include_router(metricas_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
 
 
 @app.get("/health")

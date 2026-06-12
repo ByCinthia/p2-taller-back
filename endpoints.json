@@ -1,0 +1,1336 @@
+{
+  "info": {
+    "title": "Auxilio Mecánico API - Documentación de Endpoints",
+    "version": "1.0.0",
+    "base_url": "http://localhost:8001",
+    "auth": "Bearer Token JWT en header Authorization: Bearer <token>",
+    "error_format": {
+      "detail": "string - mensaje descriptivo del error"
+    }
+  },
+
+  "auth": {
+    "prefix": "",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/token/",
+        "description": "Obtener token de acceso (login)",
+        "auth": false,
+        "body": {
+          "username": "string (requerido)",
+          "password": "string (requerido)"
+        },
+        "response_success": {
+          "access": "string (JWT access token)",
+          "refresh": "string (JWT refresh token)"
+        },
+        "errors": ["401: Credenciales inválidas"]
+      },
+      {
+        "method": "POST",
+        "path": "/login",
+        "description": "Alias de /token/ (login legacy)",
+        "auth": false,
+        "body": {
+          "username": "string (requerido)",
+          "password": "string (requerido)"
+        },
+        "response_success": {
+          "access": "string",
+          "refresh": "string"
+        },
+        "errors": ["401: Credenciales inválidas"]
+      },
+      {
+        "method": "POST",
+        "path": "/token/refresh/",
+        "description": "Refrescar token de acceso",
+        "auth": false,
+        "body": {
+          "refresh": "string (requerido) - refresh token"
+        },
+        "response_success": {
+          "access": "string (nuevo JWT access token)"
+        },
+        "errors": ["401: Token inválido o expirado"]
+      },
+      {
+        "method": "POST",
+        "path": "/register/",
+        "description": "Registro completo de empresa + admin en un solo paso",
+        "auth": false,
+        "body": {
+          "empresa_nombre": "string (requerido, máx 100)",
+          "empresa_nit": "string (requerido, máx 20)",
+          "empresa_email": "string email (opcional)",
+          "empresa_telefono": "string (opcional, máx 20)",
+          "empresa_direccion": "string (opcional, máx 255)",
+          "admin_username": "string (requerido, máx 100)",
+          "admin_password": "string (requerido)",
+          "admin_first_name": "string (requerido, máx 100)",
+          "admin_email": "string email (requerido)",
+          "admin_ci": "string (requerido, máx 20)",
+          "admin_apellido_p": "string (requerido, máx 100)",
+          "admin_apellido_m": "string (opcional, máx 100)",
+          "card_number": "string (opcional)",
+          "card_expiry": "string (opcional)",
+          "card_cvc": "string (opcional)",
+          "plan": "string (opcional, default: basico)"
+        },
+        "response_success": {
+          "access": "string",
+          "refresh": "string"
+        },
+        "errors": ["400: Datos inválidos", "409: NIT o username ya existe"]
+      },
+      {
+        "method": "POST",
+        "path": "/register/company/",
+        "description": "Paso 1 de registro: crear empresa (devuelve registration_token)",
+        "auth": false,
+        "body": {
+          "empresa_nombre": "string (requerido)",
+          "empresa_nit": "string (requerido)",
+          "empresa_email": "string email (opcional)",
+          "empresa_telefono": "string (opcional)",
+          "empresa_direccion": "string (opcional)",
+          "card_number": "string (opcional)",
+          "card_expiry": "string (opcional)",
+          "card_cvc": "string (opcional)",
+          "plan": "string (default: basico)"
+        },
+        "response_success": {
+          "empresa_id": "string",
+          "empresa_nombre": "string",
+          "registration_token": "string (usar en paso 2)"
+        },
+        "errors": ["400: Datos inválidos", "409: NIT ya registrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/register/admin/",
+        "description": "Paso 2 de registro: crear admin con registration_token",
+        "auth": false,
+        "body": {
+          "registration_token": "string (requerido, del paso 1)",
+          "admin_username": "string (requerido)",
+          "admin_password": "string (requerido)",
+          "admin_first_name": "string (requerido)",
+          "admin_email": "string email (requerido)",
+          "admin_ci": "string (requerido)",
+          "admin_apellido_p": "string (requerido)",
+          "admin_apellido_m": "string (opcional)"
+        },
+        "response_success": {
+          "access": "string",
+          "refresh": "string"
+        },
+        "errors": ["400: Token inválido o expirado", "409: Username ya existe"]
+      },
+      {
+        "method": "POST",
+        "path": "/register/client/",
+        "description": "Registro de cliente (crea usuario + cliente)",
+        "auth": false,
+        "body": {
+          "nombre": "string (requerido)",
+          "username": "string (requerido)",
+          "password": "string (requerido)",
+          "email": "string email (opcional)",
+          "telefono": "string (opcional)"
+        },
+        "response_success": {
+          "access": "string",
+          "refresh": "string"
+        },
+        "errors": ["400: Datos inválidos", "409: Username ya existe"]
+      },
+      {
+        "method": "POST",
+        "path": "/employee-invitations/activate/",
+        "description": "Activar invitación de empleado (crear credenciales)",
+        "auth": false,
+        "body": {
+          "token": "string (requerido, token de invitación)",
+          "username": "string (requerido)",
+          "password": "string (requerido)"
+        },
+        "response_success": {
+          "access": "string",
+          "refresh": "string"
+        },
+        "errors": ["400: Token inválido o expirado", "409: Username ya existe"]
+      },
+      {
+        "method": "GET",
+        "path": "/me",
+        "description": "Obtener datos del usuario autenticado",
+        "auth": true,
+        "body": null,
+        "response_success": {
+          "id": "int",
+          "username": "string",
+          "email": "string",
+          "first_name": "string",
+          "last_name": "string",
+          "role": "string (admin|cliente|empleado|usuario)",
+          "es_admin": "boolean",
+          "empresa_id": "string|null",
+          "cliente_id": "string|null",
+          "is_active": "boolean",
+          "created_at": "string ISO datetime"
+        },
+        "errors": ["401: No autenticado"]
+      },
+      {
+        "method": "POST",
+        "path": "/logout",
+        "description": "Cerrar sesión (204 sin contenido)",
+        "auth": true,
+        "body": null,
+        "response_success": "204 No Content",
+        "errors": []
+      },
+      {
+        "method": "GET",
+        "path": "/my-permissions/",
+        "description": "Lista de permisos del usuario autenticado",
+        "auth": true,
+        "body": null,
+        "response_success": ["string (nombre_permiso_1)", "string (nombre_permiso_2)"],
+        "errors": ["401: No autenticado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/fcm-token",
+        "description": "Actualizar FCM token para notificaciones push",
+        "auth": true,
+        "body": {
+          "fcm_token": "string|null (requerido)"
+        },
+        "response_success": {
+          "message": "FCM token actualizado"
+        },
+        "errors": ["401: No autenticado"]
+      }
+    ]
+  },
+
+  "clientes": {
+    "prefix": "/api/clientes",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/clientes/",
+        "description": "Listar todos los clientes",
+        "auth": true,
+        "response_success": [
+          {
+            "id": "string",
+            "nombre": "string",
+            "username": "string|null",
+            "email": "string|null",
+            "telefono": "string|null",
+            "activo": "boolean"
+          }
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/me/",
+        "description": "Obtener perfil del cliente autenticado",
+        "auth": true,
+        "response_success": {
+          "id": "string",
+          "nombre": "string",
+          "username": "string|null",
+          "email": "string|null",
+          "telefono": "string|null",
+          "activo": "boolean"
+        },
+        "errors": ["404: Cliente no encontrado"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/clientes/me/",
+        "description": "Actualizar perfil del cliente autenticado",
+        "auth": true,
+        "body": {
+          "nombre": "string (opcional)",
+          "username": "string (opcional)",
+          "password": "string (opcional)",
+          "email": "string email (opcional)",
+          "telefono": "string (opcional)",
+          "activo": "boolean (opcional)"
+        },
+        "response_success": "ClienteOut",
+        "errors": ["404: Cliente no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/me/vehiculos",
+        "description": "Listar vehículos del cliente autenticado",
+        "auth": true,
+        "response_success": [
+          {
+            "id": "string",
+            "cliente_id": "string",
+            "anio": "int|null",
+            "placa": "string|null",
+            "marca": "string|null",
+            "modelo": "string|null"
+          }
+        ],
+        "errors": ["404: Cliente no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/clientes/me/vehiculos",
+        "description": "Agregar vehículo al cliente autenticado",
+        "auth": true,
+        "body": {
+          "anio": "int (opcional)",
+          "placa": "string (opcional)",
+          "marca": "string (opcional)",
+          "modelo": "string (opcional)",
+          "principal": "boolean (opcional, default: false)"
+        },
+        "response_success": "VehiculoOut",
+        "errors": ["404: Cliente no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/me/vehiculos/{vehiculo_id}",
+        "description": "Obtener un vehículo específico del cliente",
+        "auth": true,
+        "path_params": { "vehiculo_id": "string (requerido)" },
+        "response_success": "VehiculoOut",
+        "errors": ["404: Vehiculo no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/clientes/me/vehiculos/{vehiculo_id}",
+        "description": "Eliminar un vehículo del cliente",
+        "auth": true,
+        "path_params": { "vehiculo_id": "string (requerido)" },
+        "response_success": "204 No Content",
+        "errors": ["404: Vehiculo no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/me/vehiculos/count",
+        "description": "Contar vehículos del cliente",
+        "auth": true,
+        "response_success": { "count": "int" }
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/{cliente_id}/",
+        "description": "Obtener cliente por ID",
+        "auth": true,
+        "path_params": { "cliente_id": "int (requerido)" },
+        "response_success": "ClienteOut",
+        "errors": ["404: Cliente no encontrado"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/clientes/{cliente_id}/",
+        "description": "Actualizar cliente por ID (requiere permiso manage_clientes)",
+        "auth": true,
+        "permission": "manage_clientes",
+        "path_params": { "cliente_id": "int (requerido)" },
+        "body": "ClienteUpdate",
+        "response_success": "ClienteOut",
+        "errors": ["403: Sin permisos", "404: Cliente no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/clientes/{cliente_id}/historial",
+        "description": "Historial de incidentes del cliente",
+        "auth": true,
+        "path_params": { "cliente_id": "int (requerido)" },
+        "response_success": "list[IncidenteOut]"
+      }
+    ]
+  },
+
+  "vehiculos": {
+    "prefix": "/api/vehiculos",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/vehiculos/",
+        "description": "Listar todos los vehículos (requiere permiso)",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "response_success": "list[VehiculoOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/vehiculos/atendidos",
+        "description": "Vehículos con al menos un incidente registrado",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "response_success": "list[VehiculoOut]"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/vehiculos/{vehiculo_id}/",
+        "description": "Actualizar vehículo",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "path_params": { "vehiculo_id": "string (requerido)" },
+        "body": {
+          "anio": "int (opcional)",
+          "placa": "string (opcional)",
+          "marca": "string (opcional)",
+          "modelo": "string (opcional)"
+        },
+        "response_success": "VehiculoOut",
+        "errors": ["404: Vehiculo no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/vehiculos/{vehiculo_id}/",
+        "description": "Eliminar vehículo",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "path_params": { "vehiculo_id": "string (requerido)" },
+        "response_success": "204 No Content",
+        "errors": ["404: Vehiculo no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/vehiculos/{vehiculo_id}/principal",
+        "description": "Marcar vehículo como principal",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "path_params": { "vehiculo_id": "string (requerido)" },
+        "response_success": "VehiculoOut",
+        "errors": ["404: Vehiculo no encontrado"]
+      }
+    ]
+  },
+
+  "empresa": {
+    "prefix": "/api/empresa",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/empresa/me",
+        "description": "Obtener datos de la empresa del empleado autenticado",
+        "auth": true,
+        "response_success": {
+          "id": "string",
+          "nombre": "string",
+          "nit": "string",
+          "direccion": "string|null",
+          "telefono": "string|null",
+          "email": "string|null",
+          "latitud": "float|null",
+          "longitud": "float|null",
+          "estrellas_promedio": "float (1.0-5.0)",
+          "total_calificaciones": "int"
+        },
+        "errors": ["404: Empleado o empresa no encontrada"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/empresa/me/ubicacion",
+        "description": "Actualizar ubicación de la empresa",
+        "auth": true,
+        "body": {
+          "latitud": "float (requerido, -90 a 90)",
+          "longitud": "float (requerido, -180 a 180)"
+        },
+        "response_success": "EmpresaOut",
+        "errors": ["404: Empresa no encontrada"]
+      }
+    ]
+  },
+
+  "empleados": {
+    "prefix": "/api/empleados",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/empleados/",
+        "description": "Listar empleados de la empresa (excluye admins)",
+        "auth": true,
+        "response_success": "list[EmpleadoOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/empleados/me/",
+        "description": "Obtener datos del empleado autenticado",
+        "auth": true,
+        "response_success": "EmpleadoOut",
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/empleados/",
+        "description": "Crear empleado (JSON o multipart/form-data con foto)",
+        "auth": true,
+        "permission": "manage_empleados",
+        "body_json": {
+          "ci": "string (requerido)",
+          "nombre_completo": "string (requerido)",
+          "email": "string email (requerido)",
+          "direccion": "string (opcional)",
+          "telefono": "string (opcional)",
+          "sueldo": "decimal (opcional, default: 0)",
+          "cargo": "string (opcional, nombre del cargo)",
+          "roles": "list[string] (opcional, IDs de roles)"
+        },
+        "response_success": "EmpleadoOut",
+        "errors": ["400: Datos inválidos", "409: Email o CI ya existe"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/empleados/{empleado_id}",
+        "description": "Actualizar empleado (JSON o multipart/form-data)",
+        "auth": true,
+        "permission": "manage_empleados",
+        "path_params": { "empleado_id": "string (requerido)" },
+        "body": "EmpleadoUpdate (campos opcionales)",
+        "response_success": "EmpleadoOut",
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/empleados/{empleado_id}",
+        "description": "Eliminar empleado",
+        "auth": true,
+        "permission": "manage_empleados",
+        "path_params": { "empleado_id": "string (requerido)" },
+        "response_success": "204 No Content",
+        "errors": ["404: Empleado no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/empleados/{empleado_id}/asignaciones",
+        "description": "Listar asignaciones activas de un empleado",
+        "auth": true,
+        "path_params": { "empleado_id": "string (requerido)" },
+        "response_success": "list[MiAsignacionOut]"
+      }
+    ]
+  },
+
+  "cargos": {
+    "prefix": "/api/cargos",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/cargos/",
+        "description": "Listar cargos de la empresa",
+        "auth": true,
+        "response_success": [{ "id": "string", "empresa": "string", "nombre": "string", "descripcion": "string|null" }]
+      },
+      {
+        "method": "GET",
+        "path": "/api/cargos/{cargo_id}/",
+        "description": "Obtener cargo por ID",
+        "auth": true,
+        "response_success": "CargoOut",
+        "errors": ["404: Cargo no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/cargos/",
+        "description": "Crear cargo",
+        "auth": true,
+        "permission": "manage_cargo",
+        "body": { "nombre": "string (requerido)", "descripcion": "string (opcional)" },
+        "response_success": "CargoOut",
+        "errors": ["400: Datos inválidos"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/cargos/{cargo_id}/",
+        "description": "Actualizar cargo",
+        "auth": true,
+        "permission": "manage_cargo",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)" },
+        "response_success": "CargoOut",
+        "errors": ["404: Cargo no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/cargos/{cargo_id}/",
+        "description": "Actualizar cargo (parcial)",
+        "auth": true,
+        "permission": "manage_cargo",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)" },
+        "response_success": "CargoOut",
+        "errors": ["404: Cargo no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/cargos/{cargo_id}/",
+        "description": "Eliminar cargo",
+        "auth": true,
+        "permission": "manage_cargo",
+        "response_success": "204 No Content",
+        "errors": ["404: Cargo no encontrado"]
+      }
+    ]
+  },
+
+  "roles": {
+    "prefix": "/api/roles",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/roles/",
+        "description": "Listar roles de la empresa",
+        "auth": true,
+        "response_success": [{ "id": "string", "empresa": "string", "nombre": "string", "permisos": "list[PermisoOut]" }]
+      },
+      {
+        "method": "GET",
+        "path": "/api/roles/{role_id}/",
+        "description": "Obtener rol por ID",
+        "auth": true,
+        "response_success": "RoleOut",
+        "errors": ["404: Rol no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/roles/",
+        "description": "Crear rol con permisos",
+        "auth": true,
+        "permission": "manage_rol",
+        "body": { "nombre": "string (requerido)", "permisos": "list[string] (IDs de permisos)" },
+        "response_success": "RoleOut",
+        "errors": ["400: Datos inválidos"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/roles/{role_id}/",
+        "description": "Actualizar rol",
+        "auth": true,
+        "permission": "manage_rol",
+        "body": { "nombre": "string (opcional)", "permisos": "list[string] (opcional)" },
+        "response_success": "RoleOut",
+        "errors": ["404: Rol no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/roles/{role_id}/",
+        "description": "Eliminar rol",
+        "auth": true,
+        "permission": "manage_rol",
+        "response_success": "204 No Content",
+        "errors": ["404: Rol no encontrado"]
+      }
+    ]
+  },
+
+  "permisos": {
+    "prefix": "/api/permisos",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/permisos/",
+        "description": "Listar todos los permisos",
+        "auth": true,
+        "response_success": [{ "id": "string", "nombre": "string", "descripcion": "string" }]
+      },
+      {
+        "method": "GET",
+        "path": "/api/permisos/{permiso_id}/",
+        "description": "Obtener permiso por ID",
+        "auth": true,
+        "response_success": "PermisoOut",
+        "errors": ["404: Permiso no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/permisos/",
+        "description": "Crear permiso",
+        "auth": true,
+        "permission": "manage_permiso",
+        "body": { "nombre": "string (requerido)", "descripcion": "string (requerido)" },
+        "response_success": "PermisoOut",
+        "errors": ["400: Datos inválidos", "409: Nombre ya existe"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/permisos/{permiso_id}/",
+        "description": "Actualizar permiso",
+        "auth": true,
+        "permission": "manage_permiso",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)" },
+        "response_success": "PermisoOut",
+        "errors": ["404: Permiso no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/permisos/{permiso_id}/",
+        "description": "Eliminar permiso",
+        "auth": true,
+        "permission": "manage_permiso",
+        "response_success": "204 No Content",
+        "errors": ["404: Permiso no encontrado"]
+      }
+    ]
+  },
+
+  "servicios": {
+    "prefix": "/api/servicios",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/servicios/",
+        "description": "Listar servicios de la empresa",
+        "auth": true,
+        "response_success": [{ "id_servicio": "string", "nombre": "string", "descripcion": "string|null", "activo": "boolean" }]
+      },
+      {
+        "method": "GET",
+        "path": "/api/servicios/{servicio_id}/",
+        "description": "Obtener servicio por ID",
+        "auth": true,
+        "response_success": "ServicioOut",
+        "errors": ["404: Servicio no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/servicios/",
+        "description": "Crear servicio",
+        "auth": true,
+        "permission": "manage_servicio",
+        "body": { "nombre": "string (requerido)", "descripcion": "string (opcional)", "activo": "boolean (default: true)" },
+        "response_success": "ServicioOut",
+        "errors": ["400: Datos inválidos"]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/servicios/{servicio_id}/",
+        "description": "Actualizar servicio",
+        "auth": true,
+        "permission": "manage_servicio",
+        "body": { "nombre": "string (opcional)", "descripcion": "string (opcional)", "activo": "boolean (opcional)" },
+        "response_success": "ServicioOut",
+        "errors": ["404: Servicio no encontrado"]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/servicios/{servicio_id}/",
+        "description": "Eliminar servicio",
+        "auth": true,
+        "permission": "manage_servicio",
+        "response_success": "204 No Content",
+        "errors": ["404: Servicio no encontrado"]
+      }
+    ]
+  },
+
+  "incidentes": {
+    "prefix": "/api/incidentes",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/incidentes/",
+        "description": "Listar todos los incidentes",
+        "auth": true,
+        "response_success": "list[IncidenteOut]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/",
+        "description": "Crear nuevo incidente/solicitud de auxilio",
+        "auth": true,
+        "body": {
+          "vehiculo_id": "string (opcional)",
+          "tipo": "string (opcional, ej: grua, mecanica)",
+          "descripcion": "string (opcional)",
+          "prioridad": "int (opcional)",
+          "latitud": "float (opcional, -90 a 90)",
+          "longitud": "float (opcional, -180 a 180)"
+        },
+        "response_success": "IncidenteOut",
+        "errors": ["400: Datos inválidos"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/incidentes/tecnicos/disponibles",
+        "description": "Listar técnicos disponibles",
+        "auth": true,
+        "query_params": {
+          "latitud": "float (opcional)",
+          "longitud": "float (opcional)"
+        },
+        "response_success": "list[TecnicoCercanoOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/incidentes/talleres/cercanos",
+        "description": "Buscar talleres cercanos (criterios de asignación)",
+        "auth": true,
+        "query_params": {
+          "latitud": "float (requerido)",
+          "longitud": "float (requerido)",
+          "radio_km": "float (default: 5.0, máx 50)",
+          "servicio": "string (opcional, filtra por tipo de servicio)"
+        },
+        "response_success": [
+          {
+            "empresa_id": "string",
+            "nombre": "string",
+            "latitud": "float",
+            "longitud": "float",
+            "distancia_km": "float",
+            "estrellas_promedio": "float",
+            "total_calificaciones": "int",
+            "servicios": "list[string]"
+          }
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/incidentes/{incidente_id}/",
+        "description": "Obtener detalle de un incidente",
+        "auth": true,
+        "path_params": { "incidente_id": "string (requerido)" },
+        "response_success": "IncidenteOut",
+        "errors": ["404: Incidente no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/incidentes/{incidente_id}/",
+        "description": "Actualizar incidente (requiere permiso manage_incidentes)",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": {
+          "estado": "string (opcional)",
+          "prioridad": "int (opcional)",
+          "descripcion": "string (opcional)"
+        },
+        "response_success": "IncidenteOut",
+        "errors": ["404: Incidente no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/asignacion",
+        "description": "Asignar técnico a incidente (requiere que esté aceptado)",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": {
+          "empleado_id": "string (opcional)",
+          "servicio_id": "string (opcional)"
+        },
+        "response_success": "IncidenteOut",
+        "errors": ["400: Solo incidentes aceptados", "404: No encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/aceptar-solicitud",
+        "description": "Taller acepta la solicitud (+5 estrellas gamificación)",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": null,
+        "response_success": "IncidenteOut (estado=aceptada)",
+        "errors": ["404: Incidente no encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/cancelar-aceptacion",
+        "description": "Taller cancela aceptación (-1 estrella penalización)",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": null,
+        "response_success": "IncidenteOut (estado=pendiente)",
+        "errors": ["403: No puedes cancelar aceptación de otro taller", "404: No encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/ignorar",
+        "description": "Taller ignora solicitud (-1 estrella penalización)",
+        "auth": true,
+        "body": { "empresa_id": "string (requerido)" },
+        "response_success": { "message": "penalizacion_aplicada" },
+        "errors": ["400: empresa_id requerido"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/auto-asignar",
+        "description": "Auto-asignar mejor taller (radio + servicio + rating)",
+        "auth": true,
+        "query_params": { "radio_km": "float (default: 5.0)" },
+        "response_success": {
+          "incidente_id": "string",
+          "talleres_encontrados": "int",
+          "taller_asignado": "TallerCercanoOut|null",
+          "talleres": "list[TallerCercanoOut]"
+        },
+        "errors": ["400: Solo incidentes pendientes con ubicación", "404: No encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/incidentes/{incidente_id}/estado",
+        "description": "Actualizar solo estado del incidente (para móvil)",
+        "auth": true,
+        "body": {
+          "estado": "string (requerido)",
+          "latitud": "float (opcional)",
+          "longitud": "float (opcional)"
+        },
+        "response_success": { "id": "string", "estado": "string" },
+        "errors": ["404: Incidente no encontrado"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/incidentes/{incidente_id}/tracking",
+        "description": "Obtener tracking en tiempo real del incidente",
+        "auth": true,
+        "response_success": {
+          "incidente_id": "string",
+          "estado": "string",
+          "latitud_incidente": "float|null",
+          "longitud_incidente": "float|null",
+          "asignacion_id": "string|null",
+          "empleado_id": "string|null",
+          "tecnico_nombre": "string|null",
+          "tecnico_latitud": "float|null",
+          "tecnico_longitud": "float|null",
+          "tecnico_disponible": "boolean|null",
+          "tecnico_ubicacion_actualizada_en": "string ISO|null"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/incidentes/tecnicos/mi-ubicacion",
+        "description": "Técnico actualiza su ubicación GPS",
+        "auth": true,
+        "body": {
+          "latitud": "float (requerido, -90 a 90)",
+          "longitud": "float (requerido, -180 a 180)",
+          "disponible": "boolean (opcional)"
+        },
+        "response_success": {
+          "empleado_id": "string",
+          "latitud": "float|null",
+          "longitud": "float|null",
+          "disponible": "boolean",
+          "ubicacion_actualizada_en": "string ISO|null"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/incidentes/{incidente_id}/tecnico/ubicacion",
+        "description": "Actualizar ubicación del técnico asignado a un incidente",
+        "auth": true,
+        "body": {
+          "latitud": "float (requerido)",
+          "longitud": "float (requerido)",
+          "disponible": "boolean (opcional)"
+        },
+        "response_success": "dict con datos de ubicación",
+        "errors": ["403: Solo técnico asignado", "404: No encontrado"]
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/diagnosticos",
+        "description": "Agregar diagnóstico a un incidente",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": {
+          "clasificacion": "int (opcional)",
+          "resumen": "string (opcional)",
+          "prioridad": "int (opcional)"
+        },
+        "response_success": { "id": "string", "message": "Diagnóstico agregado" }
+      },
+      {
+        "method": "GET",
+        "path": "/api/incidentes/{incidente_id}/diagnosticos",
+        "description": "Obtener diagnósticos de un incidente",
+        "auth": true,
+        "response_success": [{ "id": "string", "clasificacion": "int|null", "resumen": "string|null", "prioridad": "int|null" }]
+      },
+      {
+        "method": "PUT",
+        "path": "/api/incidentes/diagnosticos/{diagnostico_id}",
+        "description": "Actualizar diagnóstico",
+        "auth": true,
+        "permission": "manage_incidentes",
+        "body": {
+          "clasificacion": "int (opcional)",
+          "resumen": "string (opcional)",
+          "prioridad": "int (opcional)"
+        },
+        "response_success": { "id": "string", "message": "Diagnóstico actualizado" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/evidencias",
+        "description": "Agregar evidencia (texto simple)",
+        "auth": true,
+        "body": {
+          "tipo": "string (default: texto)",
+          "url_archivo": "string (opcional)",
+          "texto": "string (opcional)"
+        },
+        "response_success": { "id": "string" }
+      },
+      {
+        "method": "POST",
+        "path": "/api/incidentes/{incidente_id}/evidencias/upload",
+        "description": "Subir evidencia (foto/audio/archivo). Audio se transcribe automáticamente.",
+        "auth": true,
+        "content_type": "multipart/form-data",
+        "body": {
+          "archivo": "file (requerido)",
+          "tipo": "string (opcional, se infiere del content-type)",
+          "texto": "string (opcional)"
+        },
+        "response_success": {
+          "id": "string",
+          "url_archivo": "string (URL pública)",
+          "tipo": "string (foto|audio|archivo)",
+          "texto": "string|null (transcripción si es audio)"
+        },
+        "errors": ["404: Incidente no encontrado", "502: Error subiendo o transcribiendo"]
+      }
+    ]
+  },
+
+  "pagos": {
+    "prefix": "/api",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/asignaciones/{asignacion_id}/pago",
+        "description": "Crear pago para una asignación",
+        "auth": true,
+        "path_params": { "asignacion_id": "string (requerido)" },
+        "body": {
+          "monto_total": "decimal (opcional)",
+          "metodo_pago": "string (requerido: efectivo|qr_simulado|tarjeta_simulada)"
+        },
+        "response_success": "PagoOut",
+        "errors": ["404: Asignación no encontrada"]
+      },
+      {
+        "method": "GET",
+        "path": "/api/pagos/",
+        "description": "Listar pagos (filtrado por empresa o cliente automáticamente)",
+        "auth": true,
+        "response_success": "list[PagoOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/pagos/{pago_id}",
+        "description": "Obtener pago por ID",
+        "auth": true,
+        "response_success": "PagoOut",
+        "errors": ["404: Pago no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/pagos/{pago_id}/confirmar",
+        "description": "Confirmar pago",
+        "auth": true,
+        "response_success": "PagoOut",
+        "errors": ["404: Pago no encontrado"]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/pagos/{pago_id}/rechazar",
+        "description": "Rechazar pago",
+        "auth": true,
+        "response_success": "PagoOut",
+        "errors": ["404: Pago no encontrado"]
+      }
+    ]
+  },
+
+  "notificaciones": {
+    "prefix": "/api/notificaciones",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/notificaciones/me/",
+        "description": "Obtener notificaciones del usuario autenticado",
+        "auth": true,
+        "query_params": { "limit": "int (default: 50, máx 200)" },
+        "response_success": {
+          "items": [
+            {
+              "id": "string",
+              "titulo": "string",
+              "mensaje": "string",
+              "tipo": "string|null",
+              "data": "object",
+              "leida": "boolean",
+              "leida_en": "string ISO|null",
+              "creada_en": "string ISO"
+            }
+          ],
+          "total": "int"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/notificaciones/{notification_id}/leer",
+        "description": "Marcar notificación como leída",
+        "auth": true,
+        "response_success": "NotificacionOut",
+        "errors": ["404: Notificación no encontrada"]
+      }
+    ]
+  },
+
+  "metricas": {
+    "prefix": "/api/metricas",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/metricas/dashboard",
+        "description": "Dashboard completo con todos los KPIs",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional, filtra por taller)" },
+        "response_success": {
+          "tiempo_promedio_asignacion": { "minutos": "float|null", "total_registros": "int" },
+          "tiempo_promedio_llegada": { "minutos": "float|null", "total_registros": "int" },
+          "tipos_incidentes": [{ "tipo": "string", "cantidad": "int" }],
+          "talleres_eficientes": [{ "empresa_id": "string", "nombre": "string", "total_incidentes": "int", "tiempo_promedio_asignacion_min": "float|null", "tiempo_promedio_resolucion_min": "float|null", "estrellas_promedio": "float", "puntuacion_eficiencia": "float" }],
+          "zonas_mas_incidentes": [{ "latitud_redondeada": "float", "longitud_redondeada": "float", "cantidad": "int", "tipos": "list[string]" }],
+          "casos_cancelados": { "total_cancelados": "int", "cancelados_por_taller": "int", "cancelados_por_cliente": "int", "porcentaje_cancelacion": "float" },
+          "solicitudes_en_tiempo": { "total_asignadas": "int", "atendidas_en_tiempo": "int", "porcentaje": "float" }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/tiempo-asignacion",
+        "description": "5.1 - Tiempo promedio de asignación (minutos)",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional)" },
+        "response_success": { "minutos": "float|null", "total_registros": "int" }
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/tiempo-llegada",
+        "description": "5.2 - Tiempo promedio de llegada (minutos)",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional)" },
+        "response_success": { "minutos": "float|null", "total_registros": "int" }
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/tipos-incidentes",
+        "description": "5.3 - Conteo de incidentes por tipo",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional)" },
+        "response_success": [{ "tipo": "string", "cantidad": "int" }]
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/talleres-eficientes",
+        "description": "5.4 - Ranking de talleres más eficientes",
+        "auth": true,
+        "query_params": { "limit": "int (default: 10, máx 50)" },
+        "response_success": "list[TallerEficienteOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/zonas-incidentes",
+        "description": "5.5 - Zonas con más incidentes (cluster geográfico)",
+        "auth": true,
+        "query_params": { "limit": "int (default: 10, máx 50)" },
+        "response_success": "list[ZonaIncidenteOut]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/cancelados",
+        "description": "5.6 - Casos cancelados (por taller vs cliente)",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional)" },
+        "response_success": { "total_cancelados": "int", "cancelados_por_taller": "int", "cancelados_por_cliente": "int", "porcentaje_cancelacion": "float" }
+      },
+      {
+        "method": "GET",
+        "path": "/api/metricas/solicitudes-en-tiempo",
+        "description": "5.7 - % solicitudes atendidas dentro del tiempo estimado",
+        "auth": true,
+        "query_params": { "empresa_id": "string (opcional)" },
+        "response_success": { "total_asignadas": "int", "atendidas_en_tiempo": "int", "porcentaje": "float" }
+      }
+    ]
+  },
+
+  "dashboard": {
+    "prefix": "/api/dashboard",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/dashboard/",
+        "description": "Dashboard completo: resumen + series temporales + mapa + talleres + zonas. Combina todas las vistas en una sola respuesta.",
+        "auth": true,
+        "query_params": {
+          "empresa_id": "string (opcional, filtra por taller)",
+          "desde": "string ISO date (opcional, ej: 2026-01-01)",
+          "hasta": "string ISO date (opcional, ej: 2026-06-11)",
+          "intervalo": "string (default: day, opciones: day|week|month)",
+          "limit_talleres": "int (default: 10, máx 50)",
+          "limit_zonas": "int (default: 10, máx 50)",
+          "limit_mapa": "int (default: 500, máx 2000)"
+        },
+        "response_success": {
+          "resumen": "ResumenDashboard",
+          "por_estado": "list[IncidentePorEstado]",
+          "serie_temporal": "list[PuntoSerieTemporal]",
+          "tipos_incidentes": "list[{tipo, cantidad}]",
+          "zonas_mas_incidentes": "list[{latitud, longitud, cantidad, tipos}]",
+          "talleres_eficientes": "list[RendimientoTallerOut]",
+          "mapa_incidentes": "list[MapaIncidenteOut]"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/dashboard/resumen",
+        "description": "Tarjetas de resumen: totales por estado, talleres, clientes, técnicos, promedio estrellas",
+        "auth": true,
+        "query_params": {
+          "empresa_id": "string (opcional)",
+          "desde": "string ISO date (opcional)",
+          "hasta": "string ISO date (opcional)"
+        },
+        "response_success": {
+          "total_incidentes": "int",
+          "incidentes_pendientes": "int",
+          "incidentes_aceptados": "int",
+          "incidentes_asignados": "int",
+          "incidentes_en_proceso": "int",
+          "incidentes_atendidos": "int",
+          "incidentes_completados": "int",
+          "incidentes_cancelados": "int",
+          "total_talleres": "int",
+          "total_clientes": "int",
+          "total_tecnicos": "int",
+          "promedio_estrellas_talleres": "float"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/dashboard/por-estado",
+        "description": "Desglose de incidentes por estado con porcentajes (para gráfico de pastel)",
+        "auth": true,
+        "query_params": {
+          "empresa_id": "string (opcional)",
+          "desde": "string ISO date (opcional)",
+          "hasta": "string ISO date (opcional)"
+        },
+        "response_success": [
+          { "estado": "string", "cantidad": "int", "porcentaje": "float" }
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/dashboard/por-fecha",
+        "description": "Serie temporal de incidentes agrupados por día/semana/mes (para gráfico de línea)",
+        "auth": true,
+        "query_params": {
+          "empresa_id": "string (opcional)",
+          "desde": "string ISO date (opcional)",
+          "hasta": "string ISO date (opcional)",
+          "intervalo": "string (default: day, opciones: day|week|month)"
+        },
+        "response_success": [
+          { "fecha": "string (YYYY-MM-DD)", "cantidad": "int" }
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/dashboard/mapa",
+        "description": "Incidentes con coordenadas para renderizar en mapa (Google Maps, Leaflet, etc.)",
+        "auth": true,
+        "query_params": {
+          "empresa_id": "string (opcional)",
+          "desde": "string ISO date (opcional)",
+          "hasta": "string ISO date (opcional)",
+          "limit": "int (default: 500, máx 2000)"
+        },
+        "response_success": [
+          {
+            "incidente_id": "string",
+            "tipo": "string|null",
+            "estado": "string",
+            "latitud": "float",
+            "longitud": "float",
+            "creado_en": "string ISO datetime",
+            "cliente_nombre": "string|null",
+            "taller_nombre": "string|null"
+          }
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/dashboard/talleres",
+        "description": "Ranking de talleres con métricas de rendimiento (para tabla)",
+        "auth": true,
+        "query_params": { "limit": "int (default: 10, máx 50)" },
+        "response_success": [
+          {
+            "empresa_id": "string",
+            "nombre": "string",
+            "total_solicitudes": "int",
+            "tiempo_promedio_asignacion_min": "float|null",
+            "tiempo_promedio_resolucion_min": "float|null",
+            "estrellas_promedio": "float",
+            "puntuacion_eficiencia": "float"
+          }
+        ]
+      }
+    ]
+  },
+
+  "websocket": {
+    "prefix": "/api/ws/tracking",
+    "endpoints": [
+      {
+        "method": "WS",
+        "path": "/api/ws/tracking/notifications/{user_id}",
+        "description": "WebSocket para notificaciones en tiempo real. Enviar 'ping' para keepalive.",
+        "auth": false,
+        "path_params": { "user_id": "string (ID del usuario)" },
+        "messages_recibidos": {
+          "notification": { "id": "string", "titulo": "string", "mensaje": "string", "tipo": "string", "data": "object", "leida": "boolean", "creada_en": "string" }
+        }
+      },
+      {
+        "method": "WS",
+        "path": "/api/ws/tracking/{incidente_id}/{role}",
+        "description": "WebSocket para tracking GPS en tiempo real",
+        "auth": false,
+        "path_params": {
+          "incidente_id": "string",
+          "role": "string (client|cliente|technician|tecnico)"
+        },
+        "messages_enviados_tecnico": {
+          "location_update": { "incidente_id": "string", "latitud": "float", "longitud": "float" }
+        },
+        "messages_recibidos_cliente": {
+          "location_update": { "event": "location_update", "incidente_id": "string", "latitud": "float", "longitud": "float" },
+          "assignment_updated": { "event": "assignment_updated", "tracking": "IncidenteTrackingOut" }
+        }
+      }
+    ]
+  },
+
+  "health": {
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "description": "Health check del servidor",
+        "auth": false,
+        "response_success": { "status": "ok", "message": "string" }
+      }
+    ]
+  }
+}

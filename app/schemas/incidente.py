@@ -94,3 +94,27 @@ class IncidentePatchEstado(BaseModel):
     estado: str
     latitud: float | None = None
     longitud: float | None = None
+
+
+# ============================================================
+# FASE 1 — Asignación de Talleres
+# ============================================================
+
+class TallerCercanoOut(BaseModel):
+    """Representa un taller (empresa) cercano al incidente."""
+    empresa_id: str
+    nombre: str
+    latitud: float
+    longitud: float
+    distancia_km: float
+    estrellas_promedio: float
+    total_calificaciones: int
+    servicios: list[str] = []
+
+
+class AutoAsignarResponse(BaseModel):
+    """Resultado de la búsqueda / notificación de talleres cercanos."""
+    incidente_id: str
+    talleres_encontrados: int
+    taller_asignado: TallerCercanoOut | None = None
+    talleres: list[TallerCercanoOut] = []
