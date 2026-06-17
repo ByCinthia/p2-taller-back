@@ -1,7 +1,10 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import logging
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.routers.clientes_router import router as clientes_router
@@ -61,6 +64,19 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(reportes_router, prefix="/api")
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception:")
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin in origins or "*" in origins:
+        headers["Access-Control-Allow-Origin"] = origin or "*"
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)},
+        headers=headers,
+    )
 @app.get("/health")
 def health() -> dict[str, str]:
     return {

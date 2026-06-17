@@ -59,7 +59,7 @@ settings = get_settings()
 # ============================================================
 
 @router.get("/", response_model=list[IncidenteOut])
-def incidentes_list(db: Session = Depends(get_db)) -> list[IncidenteOut]:
+def incidentes_list(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[IncidenteOut]:
     """Listar todos los incidentes (requiere autenticación)"""
     return list_incidentes(db)
 

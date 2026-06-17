@@ -69,6 +69,7 @@ class EmpleadoOut(ORMModel):
     sueldo: Decimal
     cargo: str | None
     empresa: str
+    empresa_nombre: str | None = None
     foto_perfil: str | None
     roles_asignados: list[RoleOut]
     cargo_nombre: str | None

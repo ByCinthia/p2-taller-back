@@ -9,6 +9,7 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.security import create_token, decode_token
@@ -91,6 +92,7 @@ def _serialize_empleado(empleado: Empleado, base_url: str) -> dict:
         "sueldo": empleado.sueldo,
         "cargo": empleado.cargo_id,
         "empresa": empleado.empresa_id,
+        "empresa_nombre": empleado.empresa.nombre if empleado.empresa else None,
         "foto_perfil": foto,
         "roles": [r.id for r in empleado.roles],
         "roles_asignados": [_serialize_role(r) for r in empleado.roles],
@@ -624,11 +626,18 @@ def update_empleado(db: Session, empleado: Empleado, payload: EmpleadoUpdate, fo
 
 def delete_empleado(db: Session, empleado: Empleado) -> None:
     user = empleado.usuario
-    db.delete(empleado)
-    db.flush()
-    if user:
-        db.delete(user)
-    db.commit()
+    try:
+        db.delete(empleado)
+        db.flush()
+        if user:
+            db.delete(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede eliminar el empleado porque tiene asignaciones u otros registros relacionados."
+        )
 
 
 # -----------------------------
