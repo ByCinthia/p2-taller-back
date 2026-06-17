@@ -101,13 +101,27 @@ def send_push_notification(token: str, title: str, body: str, data: dict[str, st
         notification=messaging.Notification(title=title, body=body),
         data=data or {},
         token=token,
+        android=messaging.AndroidConfig(
+            priority="high",  # entregar de inmediato (no batch)
+            notification=messaging.AndroidNotification(
+                sound="default",
+                channel_id="high_importance_channel_v2",
+                notification_priority=messaging.AndroidNotificationPriority.PRIORITY_HIGH,
+                default_sound=True,
+                default_vibrate_timings=True,
+                visibility=messaging.AndroidNotificationVisibility.PUBLIC,
+            ),
+        ),
     )
     try:
-        res = messaging.send(message)
-        logger.info("FCM sent: %s", res)
-        return res
+        response = messaging.send(message)
+        logger.info(
+            "Firebase response: %s",
+            response
+        )
+        return response
     except Exception:
-        logger.exception("Error sending FCM to token=%s", token)
+        logger.exception("Firebase error")
         raise
 
 
@@ -265,8 +279,9 @@ def notify_assignment_to_employee(db: Session, asignacion_id: str) -> None:
 
 
 def notify_assignment_to_client(db: Session, asignacion_id: str) -> None:
+    """Evento B: Admin asignó un técnico al incidente. Notifica al cliente."""
     try:
-        from app.db.models import AsignacionServicio, Incidente, Cliente
+        from app.db.models import AsignacionServicio, Incidente, Cliente, Empleado
 
         asign: AsignacionServicio | None = db.get(AsignacionServicio, asignacion_id)
         if not asign:
@@ -283,9 +298,22 @@ def notify_assignment_to_client(db: Session, asignacion_id: str) -> None:
             logger.warning("Cliente %s no encontrado para incidente %s", incidente.cliente_id, incidente.id)
             return
 
-        titulo = "Tu solicitud está en proceso"
-        incidente_tipo = incidente.tipo or ''
-        descripcion = f"Tu solicitud de {incidente_tipo} fue asignada y está en proceso"
+        # Resolver nombre del técnico si existe
+        tecnico_nombre: str | None = None
+        if asign.empleado_id:
+            try:
+                tecnico = db.get(Empleado, asign.empleado_id)
+                if tecnico:
+                    tecnico_nombre = getattr(tecnico, 'nombre_completo', None) or None
+            except Exception:
+                pass
+
+        incidente_tipo = incidente.tipo or 'tu solicitud'
+        titulo = "Técnico asignado"
+        descripcion = f"Se asignó un técnico a tu solicitud de {incidente_tipo}."
+        if tecnico_nombre:
+            descripcion = f"El técnico {tecnico_nombre} fue asignado a tu solicitud de {incidente_tipo}."
+
         data = {
             "tipo": "tecnico_asignado",
             "incidente_id": incidente.id,
@@ -293,46 +321,42 @@ def notify_assignment_to_client(db: Session, asignacion_id: str) -> None:
             "asignacion_id": asign.id,
             "ruta": "/tracking",
             "titulo": titulo,
+            "tecnico_nombre": tecnico_nombre or "",
         }
 
         usuario_id = getattr(cliente, 'usuario_id', None)
-        fcm_token_present = bool(cliente.fcm_token)
-        logger.info(
-            "evento=notify_assignment_to_client asignacion_id=%s incidente_id=%s cliente_id=%s usuario_id=%s fcm_token_present=%s payload=%s",
-            asignacion_id,
-            incidente.id,
-            cliente.id,
-            usuario_id,
-            fcm_token_present,
-            data,
-        )
+        notificacion_db_creada = False
+        fcm_enviado = False
 
         if usuario_id:
-            _store_notification(db, usuario_id, titulo, descripcion, "assignment_created", data)
+            try:
+                _store_notification(db, usuario_id, titulo, descripcion, "tecnico_asignado", data)
+                notificacion_db_creada = True
+            except Exception:
+                logger.exception("evento=notify_assignment_to_client error guardando en DB")
 
         if cliente.fcm_token:
             try:
                 response = send_push_notification(cliente.fcm_token, APP_TITLE, descripcion, data)
+                fcm_enviado = True
                 logger.info(
-                    "evento=notify_assignment_to_client fcm_response cliente_id=%s usuario_id=%s response=%s",
-                    cliente.id,
-                    usuario_id,
-                    response,
+                    "evento=notify_assignment_to_client fcm_response=%s", response,
                 )
             except Exception:
                 logger.exception(
-                    "evento=notify_assignment_to_client error Firebase cliente_id=%s usuario_id=%s",
-                    cliente.id,
-                    usuario_id,
+                    "evento=notify_assignment_to_client error Firebase cliente_id=%s", cliente.id,
                 )
-        else:
-            logger.info(
-                "evento=notify_assignment_to_client no_fcm_token cliente_id=%s usuario_id=%s",
-                cliente.id,
-                usuario_id,
-            )
+
+        logger.info(
+            "evento=notify_assignment_to_client titulo=%r mensaje=%r "
+            "incidente_id=%s cliente_id=%s usuario_id=%s "
+            "notificacion_db_creada=%s fcm_enviado=%s",
+            titulo, descripcion, incidente.id, cliente.id, usuario_id,
+            notificacion_db_creada, fcm_enviado,
+        )
     except Exception:
         logger.exception("Error en notify_assignment_to_client")
+
 
 
 def notify_incidente_atendido(db: Session, incidente_id: str, actor_empleado_id: str | None = None) -> None:
@@ -450,7 +474,7 @@ def notify_incidente_en_proceso(db: Session, incidente_id: str) -> None:
 
 
 def notify_incidente_aceptada(db: Session, incidente_id: str) -> None:
-    """Notifica al cliente cuando el taller acepta la solicitud."""
+    """Evento A: El taller (admin) aceptó la solicitud. Aún no hay técnico asignado."""
     try:
         from app.db.models import Incidente, Cliente
 
@@ -469,8 +493,9 @@ def notify_incidente_aceptada(db: Session, incidente_id: str) -> None:
             return
 
         tipo = incidente.tipo or 'tu solicitud'
-        titulo = "Tu solicitud fue aceptada"
-        descripcion = f"El taller aceptó {tipo}. Pronto se asignará un técnico para ayudarte."
+        titulo = "Solicitud aceptada"
+        # Mensaje correcto: el taller aceptó, el técnico AÚN no ha sido asignado
+        descripcion = f"Tu solicitud de {tipo} fue aceptada por el taller. Pronto se asignará un técnico para ayudarte."
         data = {
             "tipo": "solicitud_aceptada",
             "incidente_id": incidente.id,
@@ -481,42 +506,126 @@ def notify_incidente_aceptada(db: Session, incidente_id: str) -> None:
         }
 
         usuario_id = getattr(cliente, 'usuario_id', None)
-        fcm_token_present = bool(cliente.fcm_token)
-        logger.info(
-            "evento=notify_incidente_aceptada incidente_id=%s cliente_id=%s usuario_id=%s fcm_token_present=%s payload=%s",
-            incidente.id,
-            cliente.id,
-            usuario_id,
-            fcm_token_present,
-            data,
-        )
+        notificacion_db_creada = False
+        fcm_enviado = False
 
         if usuario_id:
-            _store_notification(db, usuario_id, titulo, descripcion, "incident_accepted", data)
+            try:
+                _store_notification(db, usuario_id, titulo, descripcion, "solicitud_aceptada", data)
+                notificacion_db_creada = True
+            except Exception:
+                logger.exception("evento=notify_incidente_aceptada error guardando en DB")
 
         if cliente.fcm_token:
             try:
                 response = send_push_notification(cliente.fcm_token, APP_TITLE, descripcion, data)
+                fcm_enviado = True
                 logger.info(
-                    "evento=notify_incidente_aceptada fcm_response cliente_id=%s usuario_id=%s response=%s",
-                    cliente.id,
-                    usuario_id,
-                    response,
+                    "evento=notify_incidente_aceptada fcm_response=%s", response,
                 )
             except Exception:
                 logger.exception(
-                    "evento=notify_incidente_aceptada error Firebase cliente_id=%s usuario_id=%s",
-                    cliente.id,
-                    usuario_id,
+                    "evento=notify_incidente_aceptada error Firebase cliente_id=%s", cliente.id,
                 )
-        else:
-            logger.info(
-                "evento=notify_incidente_aceptada no_fcm_token cliente_id=%s usuario_id=%s",
-                cliente.id,
-                usuario_id,
-            )
+
+        logger.info(
+            "evento=notify_incidente_aceptada titulo=%r mensaje=%r "
+            "incidente_id=%s cliente_id=%s usuario_id=%s "
+            "notificacion_db_creada=%s fcm_enviado=%s",
+            titulo, descripcion, incidente.id, cliente.id, usuario_id,
+            notificacion_db_creada, fcm_enviado,
+        )
     except Exception:
         logger.exception("Error en notify_incidente_aceptada")
+
+
+def notify_tecnico_acepta_asignacion(
+    db: Session,
+    incidente_id: str,
+    empleado_id: str | None = None,
+) -> None:
+    """Evento C: El técnico asignado confirmó la atención y se dirige al cliente.
+
+    Llamar desde: POST /{incidente_id}/aceptar-solicitud (cuando actor es técnico, no admin).
+    """
+    try:
+        from app.db.models import Incidente, Cliente, Empleado
+
+        incidente: Incidente | None = db.get(Incidente, incidente_id)
+        if not incidente:
+            logger.warning("[tecnico_acepta] Incidente %s no encontrado", incidente_id)
+            return
+
+        if not incidente.cliente_id:
+            logger.warning("[tecnico_acepta] Incidente %s no tiene cliente_id", incidente_id)
+            return
+
+        cliente: Cliente | None = db.get(Cliente, incidente.cliente_id)
+        if not cliente:
+            logger.warning("[tecnico_acepta] Cliente no encontrado para incidente %s", incidente_id)
+            return
+
+        # Resolver nombre del técnico
+        tecnico_nombre: str | None = None
+        tecnico_id = empleado_id
+        if empleado_id:
+            try:
+                tecnico: Empleado | None = db.get(Empleado, empleado_id)
+                if tecnico:
+                    tecnico_nombre = getattr(tecnico, 'nombre_completo', None) or None
+            except Exception:
+                tecnico_nombre = None
+
+        tipo = incidente.tipo or 'tu solicitud'
+        titulo = "Técnico en camino"
+        if tecnico_nombre:
+            descripcion = f"Técnico {tecnico_nombre} confirmó la atención de tu solicitud de {tipo} y se dirige a tu ubicación."
+        else:
+            descripcion = f"El técnico asignado confirmó la atención de tu solicitud de {tipo} y se dirige a tu ubicación."
+
+        data = {
+            "tipo": "tecnico_acepta",
+            "incidente_id": incidente.id,
+            "incidentId": incidente.id,
+            "ruta": "/tracking",
+            "estado": incidente.estado or '',
+            "titulo": titulo,
+            "tecnico_nombre": tecnico_nombre or "",
+        }
+
+        usuario_id = getattr(cliente, 'usuario_id', None)
+        notificacion_db_creada = False
+        fcm_enviado = False
+
+        if usuario_id:
+            try:
+                _store_notification(db, usuario_id, titulo, descripcion, "tecnico_acepta", data)
+                notificacion_db_creada = True
+            except Exception:
+                logger.exception("evento=notify_tecnico_acepta_asignacion error guardando en DB")
+
+        if cliente.fcm_token:
+            try:
+                response = send_push_notification(cliente.fcm_token, APP_TITLE, descripcion, data)
+                fcm_enviado = True
+                logger.info(
+                    "evento=notify_tecnico_acepta_asignacion fcm_response=%s", response,
+                )
+            except Exception:
+                logger.exception(
+                    "evento=notify_tecnico_acepta_asignacion error Firebase cliente_id=%s", cliente.id,
+                )
+
+        logger.info(
+            "evento=notify_tecnico_acepta_asignacion titulo=%r mensaje=%r "
+            "incidente_id=%s cliente_id=%s usuario_id=%s "
+            "notificacion_db_creada=%s fcm_enviado=%s",
+            titulo, descripcion, incidente.id, cliente.id, usuario_id,
+            notificacion_db_creada, fcm_enviado,
+        )
+    except Exception:
+        logger.exception("Error en notify_tecnico_acepta_asignacion")
+
 
 
 def notify_incidente_iniciado(db: Session, incidente_id: str, actor_empleado_id: str | None = None) -> None:

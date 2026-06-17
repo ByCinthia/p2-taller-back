@@ -113,6 +113,22 @@ async def incidentes_asignar_tecnico(
     actor = resolve_employee(db, user)
     updated = assign_tecnico(db, inc, payload.empleado_id, servicio_id=payload.servicio_id, actor=actor)
 
+    # Evento B: notificar al cliente que un técnico fue asignado
+    try:
+        from app.services.notification_service import notify_assignment_to_client
+        # Resolver el id de la asignación recién creada
+        from app.services.asignacion_service import get_active_asignacion_for_incidente
+        asign_nueva = get_active_asignacion_for_incidente(db, updated.id)
+        if asign_nueva:
+            logger.info(
+                "[asignar-tecnico] evento=B incidente_id=%s asignacion_id=%s "
+                "empleado_id=%s → notificando al cliente",
+                updated.id, asign_nueva.id, asign_nueva.empleado_id,
+            )
+            notify_assignment_to_client(db, asign_nueva.id)
+    except Exception:
+        logger.exception("Error notificando al cliente sobre asignación de técnico")
+
     tracking = get_incidente_tracking(db, updated)
     await tracking_ws_manager.broadcast(
         updated.id,
@@ -206,10 +222,28 @@ def incidentes_aceptar_solicitud(
         except Exception:
             logger.exception("Error registrando rating 5 por aceptación")
 
-    # Notificar al cliente móvil
+    # Notificar al cliente móvil: evento correcto según quién acepta
     try:
-        from app.services.notification_service import notify_incidente_aceptada
-        notify_incidente_aceptada(db, inc.id)
+        from app.services.notification_service import (
+            notify_incidente_aceptada,
+            notify_tecnico_acepta_asignacion,
+        )
+        if asignacion_propia and actor:
+            # Evento C: el técnico asignado aceptó su propia asignación
+            logger.info(
+                "[aceptar-solicitud] evento=C tecnico_acepta "
+                "incidente_id=%s empleado_id=%s",
+                inc.id, actor.id,
+            )
+            notify_tecnico_acepta_asignacion(db, inc.id, empleado_id=actor.id)
+        else:
+            # Evento A: admin/supervisor del taller aceptó la solicitud (sin asignación de técnico aún)
+            logger.info(
+                "[aceptar-solicitud] evento=A taller_acepta "
+                "incidente_id=%s user_id=%s",
+                inc.id, user.id,
+            )
+            notify_incidente_aceptada(db, inc.id)
     except Exception:
         logger.exception("Error notificando aceptación de incidente %s", inc.id)
 
