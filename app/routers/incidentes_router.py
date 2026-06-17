@@ -19,7 +19,7 @@ from app.schemas.incidente import (
     TecnicoUbicacionUpdate,
 )
 from app.services.cliente_service import get_cliente_for_user
-from app.services.permission_service import resolve_employee
+from app.services.permission_service import resolve_employee, has_named_permission
 from app.services.incidente_service import (
     assign_tecnico,
     auto_asignar_taller,
@@ -126,30 +126,87 @@ async def incidentes_asignar_tecnico(
 
 
 @router.post("/{incidente_id}/aceptar-solicitud", response_model=IncidenteOut)
-def incidentes_aceptar_solicitud(incidente_id: str, user=Depends(require_permission("manage_incidentes")), db: Session = Depends(get_db)) -> IncidenteOut:
-    """Taller acepta la solicitud. Después de aceptar se podrá asignar técnico."""
+def incidentes_aceptar_solicitud(
+    incidente_id: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> IncidenteOut:
+    """Acepta la solicitud.
+
+    Autorización dual:
+    - Admin/supervisor con permiso manage_incidentes: pasa directo.
+    - Técnico/empleado asignado: debe tener una AsignacionServicio activa
+      (estado_tarea='asignada') para este incidente.
+    """
+    from sqlalchemy import select as sa_select
+    from app.db.models import AsignacionServicio as AsignSvc
+
+    logger.info("[aceptar-solicitud] user_id=%s incidente_id=%s", user.id, incidente_id)
+
     try:
         inc = get_incidente_or_404(db, incidente_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente no encontrado")
 
     actor = resolve_employee(db, user)
-    if not actor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Empleado (taller) no encontrado")
+    logger.info("[aceptar-solicitud] empleado encontrado=%s", actor.id if actor else None)
 
-    # mark as accepted and link empresa
-    inc.estado = 'aceptada'
-    inc.accepted_empresa_id = actor.empresa_id
+    es_admin = has_named_permission(db, user, "manage_incidentes")
+
+    # Buscar asignación del empleado actual para este incidente
+    asignacion_propia: AsignSvc | None = None
+    if actor:
+        stmt = sa_select(AsignSvc).where(
+            AsignSvc.incidente_id == incidente_id,
+            AsignSvc.empleado_id == actor.id,
+            AsignSvc.estado_tarea.in_(["asignada", "pendiente"]),
+        ).limit(1)
+        asignacion_propia = db.execute(stmt).scalars().first()
+        logger.info(
+            "[aceptar-solicitud] asignacion_propia=%s",
+            asignacion_propia.id if asignacion_propia else None,
+        )
+
+    if not es_admin and not asignacion_propia:
+        logger.warning(
+            "[aceptar-solicitud] DENEGADO user_id=%s incidente_id=%s "
+            "(no es admin ni tiene asignacion activa)",
+            user.id, incidente_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para aceptar esta solicitud. "
+                   "Solo un administrador o el técnico asignado puede aceptarla.",
+        )
+
+    logger.info("[aceptar-solicitud] AUTORIZADO user_id=%s es_admin=%s", user.id, es_admin)
+
+    # Actualizar estado del incidente
+    inc.estado = "aceptada"
+    if actor:
+        inc.accepted_empresa_id = actor.empresa_id
     db.add(inc)
+
+    # Si es el técnico asignado, marcar su asignación como aceptada
+    if asignacion_propia:
+        asignacion_propia.estado_tarea = "aceptada"
+        db.add(asignacion_propia)
+        logger.info(
+            "[aceptar-solicitud] AsignacionServicio %s → estado_tarea='aceptada'",
+            asignacion_propia.id,
+        )
+
     db.commit()
     db.refresh(inc)
 
-    # register perfect rating for acceptance
-    try:
-        register_sistema_rating_for_empresa(db, actor.empresa_id, 5)
-    except Exception:
-        logger.exception("Error registrando rating 5 por aceptación")
+    # Gamificación: rating 5 por aceptación
+    if actor:
+        try:
+            register_sistema_rating_for_empresa(db, actor.empresa_id, 5)
+        except Exception:
+            logger.exception("Error registrando rating 5 por aceptación")
 
+    # Notificar al cliente móvil
     try:
         from app.services.notification_service import notify_incidente_aceptada
         notify_incidente_aceptada(db, inc.id)
