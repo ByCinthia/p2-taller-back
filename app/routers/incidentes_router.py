@@ -150,6 +150,12 @@ def incidentes_aceptar_solicitud(incidente_id: str, user=Depends(require_permiss
     except Exception:
         logger.exception("Error registrando rating 5 por aceptación")
 
+    try:
+        from app.services.notification_service import notify_incidente_aceptada
+        notify_incidente_aceptada(db, inc.id)
+    except Exception:
+        logger.exception("Error notificando aceptación de incidente %s", inc.id)
+
     return inc
 
 

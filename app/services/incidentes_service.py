@@ -15,7 +15,12 @@ from app.services.asignacion_service import (
     create_asignacion,
     get_active_asignacion_for_incidente,
 )
-from app.services.notification_service import notify_assignment_to_employee, notify_incidente_en_proceso, notify_new_incident
+from app.services.notification_service import (
+    notify_assignment_to_employee,
+    notify_assignment_to_client,
+    notify_incidente_en_proceso,
+    notify_new_incident,
+)
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -131,8 +136,13 @@ def assign_tecnico(
     except Exception:
         # do not fail assignment if notification fails
         pass
-    # Notificación al cliente ahora se envía cuando empleado cambia a "en_proceso"
-    # (no cuando se asigna, solo cuando está en camino)
+
+    # notify the client that their request has been accepted and assigned
+    try:
+        notify_assignment_to_client(db, asign.id)
+    except Exception:
+        # do not fail assignment if client notification fails
+        pass
 
     # return incidente (unchanged except estado)
     return incidente
