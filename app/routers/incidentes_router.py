@@ -588,10 +588,16 @@ async def incidentes_patch_estado(
     # If the incident was marked as attended, notify admins and client
     try:
         if (payload.estado or '').strip().lower() == 'atendido':
+            asign = get_active_asignacion_for_incidente(db, inc.id)
+            asign_id = asign.id if asign else ""
             close_active_asignacion_for_incidente(db, inc.id)
-            from app.services.notification_service import notify_incidente_atendido
+            from app.services.notification_service import notify_incidente_atendido, notify_cliente_calificar_servicio
             # pass the empleado id who requested the change so admins get the actor name
             notify_incidente_atendido(db, inc.id, actor_empleado_id=getattr(empleado, 'id', None))
+            try:
+                notify_cliente_calificar_servicio(db, inc.id, asign_id)
+            except Exception:
+                logger.exception("Error al notificar calificacion de servicio al cliente")
     except Exception:
         # do not fail the request if notifications error
         pass

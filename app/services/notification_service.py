@@ -673,3 +673,42 @@ def notify_incidente_iniciado(db: Session, incidente_id: str, actor_empleado_id:
         _notify_staff_users(db, titulo_admin, descripcion_admin, "incident_started", data_admin, user_ids_sent)
     except Exception:
         logger.exception("Error en notify_incidente_iniciado")
+
+
+def notify_cliente_calificar_servicio(db: Session, incidente_id: str, asignacion_id: str) -> None:
+    """Notifica al cliente para que califique la atención recibida tras finalizar el servicio."""
+    try:
+        from app.db.models import Incidente, Cliente
+        incidente = db.get(Incidente, incidente_id)
+        if not incidente or not incidente.cliente_id:
+            logger.warning("[calificar_servicio] Incidente %s no encontrado o sin cliente", incidente_id)
+            return
+
+        cliente = db.get(Cliente, incidente.cliente_id)
+        if not cliente:
+            logger.warning("[calificar_servicio] Cliente %s no encontrado", incidente.cliente_id)
+            return
+
+        titulo = "Servicio finalizado"
+        mensaje = "Califica la atención recibida"
+        data = {
+            "tipo": "calificar_servicio",
+            "incidente_id": incidente_id,
+            "asignacion_id": asignacion_id,
+            "ruta": "/calificar-servicio",
+            "titulo": titulo,
+        }
+
+        if cliente.usuario_id:
+            _store_notification(db, cliente.usuario_id, titulo, mensaje, "calificar_servicio", data)
+
+        if cliente.fcm_token:
+            try:
+                send_push_notification(cliente.fcm_token, APP_TITLE, mensaje, data)
+                logger.info("[calificar_servicio] Push enviado al cliente %s", cliente.id)
+            except Exception:
+                logger.exception("[calificar_servicio] Error enviando push al cliente %s", cliente.id)
+        else:
+            logger.info("[calificar_servicio] Cliente %s no tiene fcm_token para push", cliente.id)
+    except Exception:
+        logger.exception("Error en notify_cliente_calificar_servicio")
