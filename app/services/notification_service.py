@@ -102,23 +102,18 @@ def send_push_notification(token: str, title: str, body: str, data: dict[str, st
         data=data or {},
         token=token,
         android=messaging.AndroidConfig(
-            priority="high",  # entregar de inmediato (no batch)
+            priority="high",
             notification=messaging.AndroidNotification(
                 sound="default",
                 channel_id="high_importance_channel_v2",
-                notification_priority=messaging.AndroidNotificationPriority.PRIORITY_HIGH,
                 default_sound=True,
                 default_vibrate_timings=True,
-                visibility=messaging.AndroidNotificationVisibility.PUBLIC,
             ),
         ),
     )
     try:
         response = messaging.send(message)
-        logger.info(
-            "Firebase response: %s",
-            response
-        )
+        logger.info("Firebase response: %s", response)
         return response
     except Exception:
         logger.exception("Firebase error")

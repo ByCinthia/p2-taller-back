@@ -72,7 +72,25 @@ def get_incidente_or_404(db: Session, incidente_id: str) -> Incidente:
 
 def update_incidente(db: Session, incidente: Incidente, payload: IncidenteUpdate) -> Incidente:
     if payload.estado is not None:
-        incidente.estado = payload.estado
+        estado_recibido = payload.estado
+        target_state = estado_recibido
+        
+        # Nota: en_camino/en_sitio/en_proceso son etapas visuales, no estados persistidos
+        mapeado = False
+        if target_state in {"en_camino", "en_sitio", "en_proceso"}:
+            target_state = "aceptada"
+            mapeado = True
+        elif target_state == "finalizado":
+            target_state = "atendido"
+            mapeado = True
+            
+        logger.info(f"[incidentes_service] update_incidente: estado_recibido='{estado_recibido}', estado_guardado='{target_state}', mapeado={mapeado}")
+        
+        valid_states = {"pendiente", "aceptada", "asignada", "atendido", "completada", "cancelada"}
+        if target_state in valid_states:
+            incidente.estado = target_state
+        else:
+            logger.warning(f"[incidentes_service] Intento de guardar estado invalido en BD: '{target_state}'")
     if payload.prioridad is not None:
         incidente.prioridad = payload.prioridad
     if payload.descripcion is not None:
@@ -173,9 +191,22 @@ def get_incidente_tracking(db: Session, incidente: Incidente) -> dict:
     asign = get_active_asignacion_for_incidente(db, incidente.id)
     tecnico = db.get(Empleado, asign.empleado_id) if asign else None
 
+    from app.services.tracking_ws import tracking_ws_manager
+    visual_state = tracking_ws_manager.visual_states.get(incidente.id)
+    current_state = visual_state if visual_state else incidente.estado
+
+    dist_km = None
+    eta_m = None
+    if incidente.latitud is not None and incidente.longitud is not None and tecnico and tecnico.latitud_actual is not None and tecnico.longitud_actual is not None:
+        try:
+            dist_km = round(_distance_km(float(incidente.latitud), float(incidente.longitud), float(tecnico.latitud_actual), float(tecnico.longitud_actual)), 3)
+            eta_m = int(dist_km * 2)
+        except Exception:
+            pass
+
     return {
         "incidente_id": incidente.id,
-        "estado": incidente.estado,
+        "estado": current_state,
         "latitud_incidente": float(incidente.latitud) if incidente.latitud is not None else None,
         "longitud_incidente": float(incidente.longitud) if incidente.longitud is not None else None,
         "asignacion_id": asign.id if asign else None,
@@ -185,12 +216,16 @@ def get_incidente_tracking(db: Session, incidente: Incidente) -> dict:
         "tecnico_longitud": float(tecnico.longitud_actual) if tecnico and tecnico.longitud_actual is not None else None,
         "tecnico_disponible": tecnico.disponible if tecnico else None,
         "tecnico_ubicacion_actualizada_en": tecnico.ubicacion_actualizada_en.isoformat() if tecnico and tecnico.ubicacion_actualizada_en else None,
+        "distancia_km": dist_km,
+        "eta_minutos": eta_m,
     }
 
 
 def list_tecnicos_disponibles(
     db: Session,
     empresa_id: str | None = None,
+    latitud: float | None = None,
+    longitud: float | None = None,
 ) -> list:
     """
     Retorna la lista de técnicos disponibles, manejando valores nulos
@@ -239,14 +274,24 @@ def list_tecnicos_disponibles(
         t_lat = float(tecnico.latitud_actual) if getattr(tecnico, 'latitud_actual', None) else 0.0
         t_lon = float(tecnico.longitud_actual) if getattr(tecnico, 'longitud_actual', None) else 0.0
 
+        distancia = 0.0
+        eta = None
+        if latitud is not None and longitud is not None and t_lat != 0.0 and t_lon != 0.0:
+            distancia = _distance_km(latitud, longitud, t_lat, t_lon)
+            eta = round(distancia * 2)
+
         resultados.append({
             "empleado_id": str(tecnico.id),
             "nombre_completo": nombre_display or "Técnico Disponible",
             "latitud": t_lat,
             "longitud": t_lon,
-            "distancia_km": 0.0,
+            "distancia_km": round(distancia, 3),
+            "tiempo_estimado_llegada_minutos": eta,
             "disponible": True,
         })
+
+    if latitud is not None and longitud is not None:
+        resultados.sort(key=lambda item: item["distancia_km"])
 
     return resultados
 

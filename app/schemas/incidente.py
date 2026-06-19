@@ -34,11 +34,16 @@ class TecnicoUbicacionUpdate(BaseModel):
 
 
 class TecnicoCercanoOut(BaseModel):
+    id: str | None = None
     empleado_id: str
     nombre_completo: str
-    latitud: float
-    longitud: float
-    distancia_km: float
+    latitud: float | None = None
+    longitud: float | None = None
+    latitud_actual: float | None = None
+    longitud_actual: float | None = None
+    distancia_km: float | None = None
+    tiempo_estimado_llegada_minutos: float | None = None
+    eta_minutos: float | None = None
     disponible: bool
 
 
@@ -85,6 +90,12 @@ class IncidenteOut(ORMModel):
     latitud: float | None
     longitud: float | None
     # assignment fields moved to asignacion_servicio
+    tecnico_asignado_id: str | None = None
+    tecnico_asignado_nombre: str | None = None
+    estado_asignacion: str | None = None
+    servicio_asignado: str | None = None
+    distancia_km: float | None = None
+    eta_minutos: float | None = None
     creado_en: datetime
     evidencias: List[EvidenciaOut] | None = []
     diagnosticos: List[DiagnosticoOut] | None = []

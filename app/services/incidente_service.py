@@ -76,7 +76,25 @@ def get_incidente_or_404(db: Session, incidente_id: str) -> Incidente:
 
 def update_incidente(db: Session, incidente: Incidente, payload: IncidenteUpdate) -> Incidente:
     if payload.estado is not None:
-        incidente.estado = payload.estado
+        estado_recibido = payload.estado
+        target_state = estado_recibido
+        
+        # Nota: en_camino/en_sitio/en_proceso son etapas visuales, no estados persistidos
+        mapeado = False
+        if target_state in {"en_camino", "en_sitio", "en_proceso"}:
+            target_state = "aceptada"
+            mapeado = True
+        elif target_state == "finalizado":
+            target_state = "atendido"
+            mapeado = True
+            
+        logger.info(f"[incidente_service] update_incidente: estado_recibido='{estado_recibido}', estado_guardado='{target_state}', mapeado={mapeado}")
+        
+        valid_states = {"pendiente", "aceptada", "asignada", "atendido", "completada", "cancelada"}
+        if target_state in valid_states:
+            incidente.estado = target_state
+        else:
+            logger.warning(f"[incidente_service] Intento de guardar estado invalido en BD: '{target_state}'")
     if payload.prioridad is not None:
         incidente.prioridad = payload.prioridad
     if payload.descripcion is not None:
@@ -169,9 +187,22 @@ def get_incidente_tracking(db: Session, incidente: Incidente) -> dict:
     asign = get_active_asignacion_for_incidente(db, incidente.id)
     tecnico = db.get(Empleado, asign.empleado_id) if asign else None
 
+    from app.services.tracking_ws import tracking_ws_manager
+    visual_state = tracking_ws_manager.visual_states.get(incidente.id)
+    current_state = visual_state if visual_state else incidente.estado
+
+    dist_km = None
+    eta_m = None
+    if incidente.latitud is not None and incidente.longitud is not None and tecnico and tecnico.latitud_actual is not None and tecnico.longitud_actual is not None:
+        try:
+            dist_km = round(_distance_km(float(incidente.latitud), float(incidente.longitud), float(tecnico.latitud_actual), float(tecnico.longitud_actual)), 3)
+            eta_m = int(dist_km * 2)
+        except Exception:
+            pass
+
     return {
         "incidente_id": incidente.id,
-        "estado": incidente.estado,
+        "estado": current_state,
         "latitud_incidente": float(incidente.latitud) if incidente.latitud is not None else None,
         "longitud_incidente": float(incidente.longitud) if incidente.longitud is not None else None,
         "asignacion_id": asign.id if asign else None,
@@ -181,12 +212,17 @@ def get_incidente_tracking(db: Session, incidente: Incidente) -> dict:
         "tecnico_longitud": float(tecnico.longitud_actual) if tecnico and tecnico.longitud_actual is not None else None,
         "tecnico_disponible": tecnico.disponible if tecnico else None,
         "tecnico_ubicacion_actualizada_en": tecnico.ubicacion_actualizada_en.isoformat() if tecnico and tecnico.ubicacion_actualizada_en else None,
+        "distancia_km": dist_km,
+        "eta_minutos": eta_m,
     }
 
 
 def list_tecnicos_disponibles(
     db: Session,
     empresa_id: str | None = None,
+    latitud: float | None = None,
+    longitud: float | None = None,
+    radio_km: float | None = None,
 ) -> list:
     """
     Retorna la lista de técnicos disponibles, manejando valores nulos
@@ -231,18 +267,64 @@ def list_tecnicos_disponibles(
             if not nombre_display:
                 nombre_display = getattr(u, 'username', 'Técnico sin nombre')
 
-        # Manejo seguro de coordenadas
-        t_lat = float(tecnico.latitud_actual) if getattr(tecnico, 'latitud_actual', None) else 0.0
-        t_lon = float(tecnico.longitud_actual) if getattr(tecnico, 'longitud_actual', None) else 0.0
+        try:
+            # Manejo seguro de coordenadas
+            t_lat = getattr(tecnico, 'latitud_actual', None)
+            t_lon = getattr(tecnico, 'longitud_actual', None)
 
-        resultados.append({
-            "empleado_id": str(tecnico.id),
-            "nombre_completo": nombre_display or "Técnico Disponible",
-            "latitud": t_lat,
-            "longitud": t_lon,
-            "distancia_km": 0.0,
-            "disponible": True,
-        })
+            distancia = None
+            eta = None
+
+            t_lat_float = float(t_lat) if t_lat is not None else None
+            t_lon_float = float(t_lon) if t_lon is not None else None
+
+            if latitud is not None and longitud is not None and t_lat_float is not None and t_lon_float is not None:
+                if t_lat_float != 0.0 or t_lon_float != 0.0:
+                    distancia = round(_distance_km(latitud, longitud, t_lat_float, t_lon_float), 3)
+                    eta = round(distancia * 2)
+
+            resultados.append({
+                "id": str(tecnico.id),
+                "empleado_id": str(tecnico.id),
+                "nombre_completo": nombre_display or "Técnico Disponible",
+                "disponible": True,
+                "latitud_actual": t_lat_float,
+                "longitud_actual": t_lon_float,
+                "latitud": t_lat_float,
+                "longitud": t_lon_float,
+                "distancia_km": distancia,
+                "tiempo_estimado_llegada_minutos": eta,
+                "eta_minutos": eta,
+            })
+        except Exception as e:
+            logger.error(f"Error procesando tecnico {tecnico.id}: {e}")
+            resultados.append({
+                "id": str(tecnico.id),
+                "empleado_id": str(tecnico.id),
+                "nombre_completo": nombre_display or "Técnico Disponible",
+                "disponible": True,
+                "latitud_actual": None,
+                "longitud_actual": None,
+                "latitud": None,
+                "longitud": None,
+                "distancia_km": None,
+                "tiempo_estimado_llegada_minutos": None,
+                "eta_minutos": None,
+            })
+
+    # Sort: first those with location (and distance), sorted by distance.
+    # Those without location go at the end.
+    def sort_key(x):
+        if x["distancia_km"] is not None:
+            return (0, x["distancia_km"])
+        return (1, float('inf'))
+
+    resultados.sort(key=sort_key)
+
+    if latitud is not None and longitud is not None:
+        logger.info(f"[tecnicos_disponibles] latitud={latitud} longitud={longitud} cantidad_encontrados={len(resultados)}")
+        for idx, r in enumerate(resultados[:5]):
+            logger.info(f"   {idx+1}. {r['nombre_completo']} - dist: {r['distancia_km']} km")
 
     return resultados
 

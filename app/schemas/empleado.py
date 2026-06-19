@@ -13,10 +13,21 @@ class MiAsignacionOut(BaseModel):
     incidente_estado: str | None = None
     incidente_latitud: float | None = None
     incidente_longitud: float | None = None
+    prioridad: str | None = None
+    cliente_nombre: str | None = None
+    cliente_telefono: str | None = None
+    vehiculo_marca: str | None = None
+    vehiculo_modelo: str | None = None
+    vehiculo_placa: str | None = None
+    vehiculo_anio: int | None = None
     fecha_asignacion: str
     estado_tarea: str
     servicio_id: str | None = None
     servicio_nombre: str | None = None
+    latitud_actual: float | None = None
+    longitud_actual: float | None = None
+    distancia_km: float | None = None
+    eta_minutos: int | None = None
 
 
 class UsuarioOut(ORMModel):
@@ -71,5 +82,8 @@ class EmpleadoOut(ORMModel):
     empresa: str
     empresa_nombre: str | None = None
     foto_perfil: str | None
+    latitud_actual: float | None = None
+    longitud_actual: float | None = None
+    disponible: bool = True
     roles_asignados: list[RoleOut]
     cargo_nombre: str | None

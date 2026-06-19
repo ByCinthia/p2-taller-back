@@ -97,6 +97,9 @@ def _serialize_empleado(empleado: Empleado, base_url: str) -> dict:
         "roles": [r.id for r in empleado.roles],
         "roles_asignados": [_serialize_role(r) for r in empleado.roles],
         "cargo_nombre": empleado.cargo.nombre if empleado.cargo else None,
+        "latitud_actual": float(empleado.latitud_actual) if empleado.latitud_actual is not None else None,
+        "longitud_actual": float(empleado.longitud_actual) if empleado.longitud_actual is not None else None,
+        "disponible": empleado.disponible,
     }
 
 

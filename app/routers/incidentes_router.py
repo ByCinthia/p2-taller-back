@@ -38,6 +38,7 @@ from app.services.incidente_service import (
     list_diagnosticos_for_incidente,
     get_diagnostico_or_404,
     update_diagnostico,
+    _distance_km,
 )
 from app.services.asignacion_service import get_active_asignacion_for_incidente
 from app.services.file_storage import save_incidente_evidence
@@ -58,10 +59,49 @@ settings = get_settings()
 # CRUD BÁSICO
 # ============================================================
 
+def _populate_assignment(db: Session, inc) -> None:
+    asign = get_active_asignacion_for_incidente(db, inc.id)
+    if asign:
+        inc.tecnico_asignado_id = asign.empleado_id
+        if asign.empleado:
+            nombre = asign.empleado.nombre_completo
+            if not nombre and asign.empleado.usuario:
+                nombre = f"{asign.empleado.usuario.first_name or ''} {asign.empleado.usuario.last_name or ''}".strip()
+            inc.tecnico_asignado_nombre = nombre or "Técnico"
+        inc.estado_asignacion = asign.estado_tarea
+        # No 'servicio' relation natively, but if it exists we can try:
+        if hasattr(asign, "servicio") and asign.servicio:
+            inc.servicio_asignado = asign.servicio.nombre
+            
+        # Calcular distancia y ETA si hay coordenadas
+        if getattr(inc, "latitud", None) is not None and getattr(inc, "longitud", None) is not None:
+            t_lat = getattr(asign.empleado, "latitud_actual", None)
+            t_lon = getattr(asign.empleado, "longitud_actual", None)
+            
+            if t_lat is not None and t_lon is not None:
+                t_lat_float = float(t_lat)
+                t_lon_float = float(t_lon)
+                i_lat_float = float(inc.latitud)
+                i_lon_float = float(inc.longitud)
+                
+                if (t_lat_float != 0.0 or t_lon_float != 0.0) and (i_lat_float != 0.0 or i_lon_float != 0.0):
+                    try:
+                        distancia = round(_distance_km(i_lat_float, i_lon_float, t_lat_float, t_lon_float), 3)
+                        inc.distancia_km = distancia
+                        inc.eta_minutos = int(distancia * 2)
+                    except Exception as e:
+                        logger.error(f"Error calculating distance for assignment {asign.id}: {e}")
+                        inc.distancia_km = None
+                        inc.eta_minutos = None
+
 @router.get("/", response_model=list[IncidenteOut])
 def incidentes_list(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[IncidenteOut]:
     """Listar todos los incidentes (requiere autenticación)"""
-    return list_incidentes(db)
+    incidentes = list_incidentes(db)
+    # Populate active assignments for response
+    for inc in incidentes:
+        _populate_assignment(db, inc)
+    return incidentes
 
 
 #@router.get("/tecnicos/cercanos", response_model=list[TecnicoCercanoOut])
@@ -86,7 +126,7 @@ def tecnicos_disponibles(
 ) -> list[TecnicoCercanoOut]:
     # Para pruebas de asignación mostramos todos los empleados libres no administrativos.
     # Esto evita que una empresa sin técnicos libres quede con una lista vacía.
-    return list_tecnicos_disponibles(db, empresa_id=None)
+    return list_tecnicos_disponibles(db, empresa_id=None, latitud=latitud, longitud=longitud)
 
 @router.post("/", response_model=IncidenteOut, status_code=status.HTTP_201_CREATED)
 def incidentes_create(payload: IncidenteCreate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> IncidenteOut:
@@ -95,7 +135,9 @@ def incidentes_create(payload: IncidenteCreate, user=Depends(get_current_user), 
     if cliente:
         cliente_id = cliente.id
 
-    return create_incidente(db, payload, cliente_id=cliente_id)
+    inc = create_incidente(db, payload, cliente_id=cliente_id)
+    _populate_assignment(db, inc)
+    return inc
 
 
 @router.post("/{incidente_id}/asignacion", response_model=IncidenteOut)
@@ -137,6 +179,7 @@ async def incidentes_asignar_tecnico(
             "tracking": tracking,
         },
     )
+    _populate_assignment(db, updated)
     return updated
 
 
@@ -247,6 +290,7 @@ def incidentes_aceptar_solicitud(
     except Exception:
         logger.exception("Error notificando aceptación de incidente %s", inc.id)
 
+    _populate_assignment(db, inc)
     return inc
 
 
@@ -278,6 +322,7 @@ def incidentes_cancelar_aceptacion(incidente_id: str, user=Depends(require_permi
     except Exception:
         logger.exception("Error registrando penalización por cancelación")
 
+    _populate_assignment(db, inc)
     return inc
 
 
@@ -301,7 +346,9 @@ def incidentes_retrieve(
 ) -> IncidenteOut:
     """Obtener detalle de un incidente"""
     try:
-        return get_incidente_or_404(db, incidente_id)
+        inc = get_incidente_or_404(db, incidente_id)
+        _populate_assignment(db, inc)
+        return inc
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente no encontrado")
 
@@ -321,6 +368,7 @@ async def incidentes_update(incidente_id: str, payload: IncidenteUpdate, user=De
             "tracking": tracking,
         },
     )
+    _populate_assignment(db, updated)
     return updated
 
 
@@ -370,6 +418,12 @@ async def incidentes_actualizar_ubicacion_tecnico(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente no encontrado")
 
+    logger.info(f"[backend] Recibida actualización de ubicación del técnico para incidente: {incidente_id} ({payload.latitud}, {payload.longitud})")
+    from app.services.tracking_ws import tracking_ws_manager
+    if inc.estado == "aceptada" and tracking_ws_manager.visual_states.get(inc.id) is None:
+        tracking_ws_manager.visual_states[inc.id] = "en_camino"
+        logger.info(f"[backend] Set visual state of incident {inc.id} to 'en_camino' upon receiving location update")
+        
     updated = update_incidente_tecnico_ubicacion(db, inc, empleado, payload)
     tracking = get_incidente_tracking(db, inc)
     await tracking_ws_manager.broadcast(
@@ -379,6 +433,7 @@ async def incidentes_actualizar_ubicacion_tecnico(
             "tracking": tracking,
         },
     )
+    logger.info(f"[backend] WebSocket broadcast realizado de ubicación para incidente: {inc.id}")
 
     return {
         "incidente_id": incidente_id,
@@ -416,48 +471,106 @@ async def incidentes_tracking_ws(websocket: WebSocket, incidente_id: str) -> Non
 # ============================================================
 
 @router.patch("/{incidente_id}/estado", response_model=dict)
-def incidentes_patch_estado(
+async def incidentes_patch_estado(
     incidente_id: str,
     payload: IncidentePatchEstado,  # ← Usa un schema específico
     empleado=Depends(get_current_employee),
     db: Session = Depends(get_db)
 ) -> dict:
     """Actualizar solo el estado del incidente (útil para móvil)"""
+    _estado_norm = (payload.estado or '').strip().lower()
+    logger.info(f"[backend] iniciar recorrido clickeado / recibido estado: '{_estado_norm}' para incidente: {incidente_id}")
     try:
         inc = get_incidente_or_404(db, incidente_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente no encontrado")
     
-    inc.estado = payload.estado
+    target_state = payload.estado
+    estado_recibido = target_state
     
-    # Si el empleado cambia a "en_proceso", actualizar ubicación y notificar al cliente
-    if (payload.estado or '').strip().lower() == 'en_proceso':
+    # Nota: en_camino/en_sitio/en_proceso son etapas visuales, no estados persistidos
+    mapeado = False
+    if target_state in {"en_camino", "en_sitio", "en_proceso"}:
+        target_state = "aceptada"
+        mapeado = True
+    elif target_state == "finalizado":
+        target_state = "atendido"
+        mapeado = True
+        
+    logger.info(f"[backend] incidentes_patch_estado: estado_recibido='{estado_recibido}', estado_guardado='{target_state}', mapeado={mapeado}")
+    
+    valid_states = {"pendiente", "aceptada", "asignada", "atendido", "completada", "cancelada"}
+    if target_state in valid_states:
+        inc.estado = target_state
+    else:
+        logger.warning(f"[backend] Intento de guardar estado invalido en BD: '{target_state}'")
+
+    # Save visual state in memory
+    from app.services.tracking_ws import tracking_ws_manager
+    if _estado_norm in {"en_camino", "en_sitio"}:
+        tracking_ws_manager.visual_states[incidente_id] = _estado_norm
+        logger.info(f"[backend] Guardado estado visual temporal '{_estado_norm}' en memoria para incidente: {incidente_id}")
+    elif _estado_norm in {"finalizado", "atendido", "finalizada"}:
+        tracking_ws_manager.visual_states.pop(incidente_id, None)
+        logger.info(f"[backend] Limpiado estado visual en memoria para incidente: {incidente_id}")
+
+    # Sync active assignment estado_tarea with the incidente estado for key transitions
+    _tarea_map = {
+        'en_camino': 'aceptada',
+        'en_sitio': 'aceptada',
+        'en_proceso': 'aceptada',
+        'atendido': 'finalizado',
+        'finalizado': 'finalizado',
+    }
+    if _estado_norm in _tarea_map:
+        try:
+            _asign = get_active_asignacion_for_incidente(db, inc.id)
+            if _asign and _asign.empleado_id == getattr(empleado, 'id', None):
+                _asign.estado_tarea = _tarea_map[_estado_norm]
+                db.add(_asign)
+        except Exception:
+            logger.exception("Error sincronizando estado_tarea para incidente %s", inc.id)
+
+    # Si el empleado cambia a "en_camino" o "en_proceso", actualizar ubicación y notificar
+    if _estado_norm in {'en_camino', 'en_proceso'}:
         # Actualizar ubicación del empleado si se proporciona
         if payload.latitud is not None and payload.longitud is not None:
+            logger.info(f"[backend] backend recibió ubicación inicial: ({payload.latitud}, {payload.longitud}) para incidente: {incidente_id}")
             try:
                 ubicacion_update = TecnicoUbicacionUpdate(
                     latitud=payload.latitud,
                     longitud=payload.longitud
                 )
                 update_tecnico_ubicacion(db, empleado, ubicacion_update)
-            except Exception as e:
-                # No fallar la solicitud si actualización de ubicación falla
+            except Exception:
                 pass
-        
+
         # Notificar al cliente que el empleado está en camino
         try:
             from app.services.notification_service import notify_incidente_en_proceso, notify_incidente_iniciado
             notify_incidente_en_proceso(db, inc.id)
-            # Notificar también a administradores que el técnico inició la atención
             try:
                 notify_incidente_iniciado(db, inc.id, actor_empleado_id=getattr(empleado, 'id', None))
             except Exception:
                 logger.exception("Error notificando inicio a administradores para incidente %s", inc.id)
         except Exception:
-            # No fallar la solicitud si la notificación falla
             pass
-    
+
     db.commit()
+
+    # Broadcast state change to administration WebSockets
+    try:
+        tracking = get_incidente_tracking(db, inc)
+        await tracking_ws_manager.broadcast(
+            inc.id,
+            {
+                "event": "technician_state_changed",
+                "tracking": tracking,
+            },
+        )
+        logger.info(f"[backend] WebSocket broadcast realizado por cambio de estado de incidente: {inc.id}")
+    except Exception:
+        logger.exception("Error retransmitiendo cambio de estado por WebSocket")
 
     # Regla de cancelación automática: si la solicitud es cancelada después de haberse aceptado,
     # el sistema penaliza con 1 estrella el promedio del taller.

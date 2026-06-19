@@ -5,13 +5,22 @@ from collections import defaultdict
 from fastapi import WebSocket
 
 
+import logging
+logger = logging.getLogger("tracking_ws")
+
 class TrackingConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
+        self.visual_states: dict[str, str] = {}
 
     async def connect(self, incidente_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
         self._connections[incidente_id].add(websocket)
+        logger.info(
+            f"\n[TRACKING]\n"
+            f"incidente_id={incidente_id}\n"
+            f"clientes_conectados={len(self._connections[incidente_id])}\n"
+        )
 
     def disconnect(self, incidente_id: str, websocket: WebSocket) -> None:
         conexiones = self._connections.get(incidente_id)
@@ -24,6 +33,20 @@ class TrackingConnectionManager:
 
     async def broadcast(self, incidente_id: str, payload: dict) -> None:
         conexiones = self._connections.get(incidente_id)
+        clientes_conectados = len(conexiones) if conexiones else 0
+        
+        tracking = payload.get("tracking", {})
+        lat = tracking.get("tecnico_latitud")
+        lon = tracking.get("tecnico_longitud")
+        
+        logger.info(
+            f"\n[TRACKING]\n"
+            f"incidente_id={incidente_id}\n"
+            f"latitud={lat}\n"
+            f"longitud={lon}\n"
+            f"clientes_conectados={clientes_conectados}\n"
+        )
+
         if not conexiones:
             return
 

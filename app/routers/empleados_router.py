@@ -4,9 +4,9 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.db.models import AsignacionServicio, Empresa, Servicio, User
+from app.db.models import AsignacionServicio, Empresa, Servicio, User, Incidente
 from app.db.session import get_db
 from app.deps.auth import get_base_url, get_current_user, require_permission, resolve_tenant_empresa_id
 from app.schemas.empleado import MiAsignacionOut
@@ -132,6 +132,10 @@ def empleados_mis_asignaciones(
 
         stmt = (
                 select(AsignacionServicio)
+                .options(
+                    joinedload(AsignacionServicio.incidente)
+                    .joinedload(Incidente.vehiculo)
+                )
                 .where(AsignacionServicio.empleado_id == empleado.id)
                 .where(AsignacionServicio.empresa_id == empresa_id)
                 .order_by(AsignacionServicio.fecha_asignacion.desc())
@@ -149,23 +153,110 @@ def empleados_mis_asignaciones(
             ).all()
             servicio_nombres = {str(servicio_id): nombre for servicio_id, nombre in servicios}
 
+        import logging
+        logger = logging.getLogger(__name__)
+
         result: list[MiAsignacionOut] = []
         for asignacion in rows:
-            incidente = asignacion.incidente
-            result.append(
-                MiAsignacionOut(
-                    incidente_id=str(asignacion.incidente_id),
-                    incidente_tipo=incidente.tipo if incidente else None,
-                    incidente_descripcion=incidente.descripcion if incidente else None,
-                    incidente_estado=incidente.estado if incidente else None,
-                    incidente_latitud=float(incidente.latitud) if incidente and incidente.latitud is not None else None,
-                    incidente_longitud=float(incidente.longitud) if incidente and incidente.longitud is not None else None,
-                    fecha_asignacion=asignacion.fecha_asignacion.isoformat(),
-                    estado_tarea=asignacion.estado_tarea,
-                    servicio_id=asignacion.servicio_id,
-                    servicio_nombre=servicio_nombres.get(str(asignacion.servicio_id)),
+            try:
+                incidente = asignacion.incidente
+                
+                # Safe vehicle fields mapping
+                v_marca, v_modelo, v_placa, v_ano = None, None, None, None
+                try:
+                    if incidente and incidente.vehiculo:
+                        v_marca = incidente.vehiculo.marca
+                        v_modelo = incidente.vehiculo.modelo
+                        v_placa = incidente.vehiculo.placa
+                        v_ano = incidente.vehiculo.ano
+                except Exception as e:
+                    logger.warning(
+                        "Error reading vehicle details for asignacion %s, incidente %s: %s",
+                        asignacion.id, asignacion.incidente_id, str(e)
+                    )
+
+                # Safe client fields mapping
+                c_nombre, c_telefono = None, None
+                try:
+                    if incidente and incidente.cliente:
+                        c_nombre = incidente.cliente.nombre
+                        c_telefono = incidente.cliente.telefono
+                except Exception as e:
+                    logger.warning(
+                        "Error reading client details for asignacion %s, incidente %s: %s",
+                        asignacion.id, asignacion.incidente_id, str(e)
+                    )
+
+                incidente_lat = None
+                incidente_lon = None
+                if incidente:
+                    try:
+                        if incidente.latitud is not None:
+                            incidente_lat = float(incidente.latitud)
+                        if incidente.longitud is not None:
+                            incidente_lon = float(incidente.longitud)
+                    except Exception:
+                        pass
+
+                # Fallback values for employee fields
+                lat_act, lon_act, dist_km, eta_m = None, None, None, None
+                try:
+                    if empleado:
+                        if empleado.latitud_actual is not None:
+                            lat_act = float(empleado.latitud_actual)
+                        if empleado.longitud_actual is not None:
+                            lon_act = float(empleado.longitud_actual)
+                        if lat_act is not None and lon_act is not None and incidente_lat is not None and incidente_lon is not None:
+                            from app.services.incidente_service import _distance_km
+                            dist_km = round(_distance_km(incidente_lat, incidente_lon, lat_act, lon_act), 3)
+                            eta_m = int(dist_km * 2)
+                except Exception as e:
+                    logger.warning("Error calculating distance in get_me_asignaciones: %s", str(e))
+
+                result.append(
+                    MiAsignacionOut(
+                        incidente_id=str(asignacion.incidente_id),
+                        incidente_tipo=incidente.tipo if incidente else None,
+                        incidente_descripcion=incidente.descripcion if incidente else None,
+                        incidente_estado=incidente.estado if incidente else None,
+                        incidente_latitud=incidente_lat,
+                        incidente_longitud=incidente_lon,
+                        prioridad=str(incidente.prioridad) if (incidente and incidente.prioridad is not None) else None,
+                        cliente_nombre=c_nombre,
+                        cliente_telefono=c_telefono,
+                        vehiculo_marca=v_marca,
+                        vehiculo_modelo=v_modelo,
+                        vehiculo_placa=v_placa,
+                        vehiculo_anio=v_ano,
+                        fecha_asignacion=asignacion.fecha_asignacion.isoformat(),
+                        estado_tarea=asignacion.estado_tarea,
+                        servicio_id=asignacion.servicio_id,
+                        servicio_nombre=servicio_nombres.get(str(asignacion.servicio_id)),
+                        latitud_actual=lat_act,
+                        longitud_actual=lon_act,
+                        distancia_km=dist_km,
+                        eta_minutos=eta_m,
+                    )
                 )
-            )
+            except Exception as e:
+                logger.error(
+                    "Error mapping asignacion %s, incidente %s: %s",
+                    getattr(asignacion, "id", None),
+                    getattr(asignacion, "incidente_id", None),
+                    str(e),
+                    exc_info=True
+                )
+                # Ensure the request doesn't crash: return a minimal safe object
+                try:
+                    result.append(
+                        MiAsignacionOut(
+                            incidente_id=str(getattr(asignacion, "incidente_id", "")),
+                            fecha_asignacion=getattr(asignacion, "fecha_asignacion", datetime.now(timezone.utc)).isoformat() if getattr(asignacion, "fecha_asignacion", None) else datetime.now(timezone.utc).isoformat(),
+                            estado_tarea=getattr(asignacion, "estado_tarea", "asignada"),
+                        )
+                    )
+                except Exception:
+                    pass
 
         return result
 
