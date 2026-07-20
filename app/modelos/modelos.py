@@ -60,6 +60,10 @@ class User(Base):
     empleado: Mapped[Empleado | None] = relationship(back_populates="usuario", uselist=False)
     notificaciones: Mapped[list[Notificacion]] = relationship(back_populates="usuario")
 
+    @property
+    def empresa_id(self) -> str | None:
+        return self.empleado.empresa_id if self.empleado else None
+
 
 class Empresa(Base):
     __tablename__ = "empresa"
